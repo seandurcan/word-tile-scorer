@@ -37,26 +37,27 @@ jobs:
           dotnet publish WordTileScorer.App/WordTileScorer.App.csproj \
             --framework net10.0-android \
             --configuration Release \
+            --runtime android-arm64 \
             -p:AndroidPackageFormat=apk \
             -p:AndroidKeyStore=true \
             -p:AndroidSigningKeyStore="$RUNNER_TEMP/wordtiles-dev.keystore" \
             -p:AndroidSigningStorePass=WordTilesDev2026 \
             -p:AndroidSigningKeyAlias=wordtilesdev \
             -p:AndroidSigningKeyPass=WordTilesDev2026
-          cp WordTileScorer.App/bin/Release/net10.0-android/publish/*-Signed.apk WordTileScorer-Android-v0.3.1.apk
+          cp WordTileScorer.App/bin/Release/net10.0-android/android-arm64/publish/*-Signed.apk WordTileScorer-Android-v0.3.2.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WordTileScorer-Android-v0.3.1
-          path: WordTileScorer-Android-v0.3.1.apk
+          name: WordTileScorer-Android-v0.3.2
+          path: WordTileScorer-Android-v0.3.2.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish direct GitHub download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.1
-          name: Word Tile Scorer v0.3.1
-          files: WordTileScorer-Android-v0.3.1.apk
+          tag_name: v0.3.2
+          name: Word Tile Scorer v0.3.2
+          files: WordTileScorer-Android-v0.3.2.apk
           fail_on_unmatched_files: true
