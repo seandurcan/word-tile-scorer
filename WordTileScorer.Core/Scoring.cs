@@ -135,11 +135,7 @@ public sealed class GameEngine
             throw new TileLimitException(shortages);
         var words = scores.Select(s => s.Build()).ToArray();
         var bingo = tiles.Length == 7 ? 50 : 0;
-        return AddTurn(game, words, checked(words.Sum(w => w.Score) + bingo), false, playedAt) with
-        {
-            PlacedTiles = tiles,
-            BingoBonus = bingo
-        };
+        return AddTurn(game, words, checked(words.Sum(w => w.Score) + bingo), false, playedAt, tiles, bingo);
     }
 
     public static IReadOnlyDictionary<char, int> UsedTiles(GameState game) => game.Turns
@@ -189,12 +185,18 @@ public sealed class GameEngine
         IReadOnlyList<PlayedWord> words,
         int score,
         bool isPass,
-        DateTimeOffset? playedAt)
+        DateTimeOffset? playedAt,
+        IReadOnlyList<char>? placedTiles = null,
+        int bingoBonus = 0)
     {
         var player = game.CurrentPlayer;
         var turn = new Turn(
             Guid.NewGuid(), player.Id, game.TeamFor(player.Id)?.Id,
-            playedAt ?? DateTimeOffset.Now, words, score, isPass);
+            playedAt ?? DateTimeOffset.Now, words, score, isPass)
+        {
+            PlacedTiles = placedTiles ?? [],
+            BingoBonus = bingoBonus
+        };
         game.Turns.Add(turn);
         game.CurrentTurnIndex = (game.CurrentTurnIndex + 1) % game.TurnOrder.Count;
         return turn;
