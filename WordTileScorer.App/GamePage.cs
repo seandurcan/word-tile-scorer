@@ -7,16 +7,35 @@ public sealed class GamePage : ContentPage
 {
     private readonly GameState _game;
     private readonly GameEngine _engine = new();
-    private readonly Label _turn = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
+    private readonly Label _turn = new() { FontSize = 26, FontAttributes = FontAttributes.Bold, TextColor = Colors.White };
+    private readonly Label _turnDetail = new() { FontSize = 14, TextColor = Colors.White };
+    private readonly Border _activePlayerCard;
     private readonly VerticalStackLayout _totals = new() { Spacing = 4 };
     private readonly VerticalStackLayout _words = new() { Spacing = 14 };
     private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
-    private readonly Button _record = new() { Text = "Record turn", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White };
+    private readonly Button _record = new() { Text = "Record turn", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
 
     public GamePage(GameState game)
     {
         _game = game;
         Title = "Score game";
+        _activePlayerCard = new Border
+        {
+            BackgroundColor = AppPalette.Navy,
+            Stroke = AppPalette.Blue,
+            StrokeThickness = 2,
+            Padding = 16,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 },
+            Content = new VerticalStackLayout
+            {
+                Spacing = 2,
+                Children =
+                {
+                    new Label { Text = "ACTIVE PLAYER", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#F0E442"), CharacterSpacing = 2 },
+                    _turn, _turnDetail
+                }
+            }
+        };
         AddWord();
 
         var addWord = new Button { Text = "Add another word" };
@@ -47,7 +66,7 @@ public sealed class GamePage : ContentPage
                 Padding = 20, Spacing = 12,
                 Children =
                 {
-                    _turn, _totals,
+                    _activePlayerCard, _totals,
                     new BoxView { HeightRequest = 1, Color = Colors.Gray },
                     new Label { Text = "Words made by this play", FontSize = 20, FontAttributes = FontAttributes.Bold },
                     new Label { Text = "Enter a complete word. Select one or more letters, apply one letter premium to them, then choose any word premiums covered." },
@@ -115,7 +134,10 @@ public sealed class GamePage : ContentPage
     private void RefreshGame()
     {
         var team = _game.TeamFor(_game.CurrentPlayer.Id);
-        _turn.Text = team is null ? $"Current turn: {_game.CurrentPlayer.Name}" : $"Current turn: {_game.CurrentPlayer.Name} — {team.Name}";
+        _turn.Text = _game.CurrentPlayer.Name;
+        _turnDetail.Text = team is null
+            ? $"Individual play · Turn {_game.Turns.Count + 1}"
+            : $"{team.Name} · Turn {_game.Turns.Count + 1}";
         _totals.Children.Clear();
         if (_game.Mode == GameMode.Teams)
             foreach (var item in _game.Teams) _totals.Children.Add(new Label { Text = $"{item.Name}: {_game.TeamTotal(item.Id)}" });
@@ -156,7 +178,7 @@ public sealed class WordEntryView : Border
         SelectedIndex = 0
     }).ToArray();
     private readonly Label _calculation = new() { FontSize = 17 };
-    private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = Colors.DarkOrange };
+    private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = AppPalette.Amber };
     private readonly HashSet<int> _selectedLetters = [];
     private bool _updating;
     private string? _confirmedWord;
@@ -258,13 +280,13 @@ public sealed class WordEntryView : Border
         if (_selectedLetters.Count == 0)
         {
             _selected.Text = "Select at least one tile before applying a letter premium.";
-            _selected.TextColor = Colors.Red;
+            _selected.TextColor = AppPalette.Vermillion;
             return;
         }
         foreach (var index in _selectedLetters) Score.SetLetterMultiplier(index, multiplier);
         _selectedLetters.Clear();
         _selected.Text = "Select one or more letters above";
-        _selected.TextColor = Colors.Black;
+        _selected.TextColor = AppPalette.Slate;
         RefreshLetterButtons(); RefreshLetterSelectionList(); RefreshCalculation();
     }
 
@@ -294,7 +316,8 @@ public sealed class WordEntryView : Border
             var play = Score.Letters[i];
             var premium = play.LetterMultiplier switch { 2 => " DL", 3 => " TL", _ => string.Empty };
             button.Text = $"{play.Letter}\n{play.BaseValue}{premium}";
-            button.BackgroundColor = _selectedLetters.Contains(i) ? Color.FromArgb("#F4E3B2") : Colors.Transparent;
+            button.BackgroundColor = _selectedLetters.Contains(i) ? Color.FromArgb("#F0E442") : AppPalette.Ivory;
+            button.TextColor = AppPalette.Navy;
         }
     }
 
@@ -310,7 +333,7 @@ public sealed class WordEntryView : Border
     {
         _confirmedWord = null;
         _validation.Text = "Word not yet checked";
-        _validation.TextColor = Colors.DarkOrange;
+        _validation.TextColor = AppPalette.Amber;
     }
 
     private async void CheckWord(object? sender, EventArgs e)
@@ -318,7 +341,7 @@ public sealed class WordEntryView : Border
         if (Score.Letters.Count == 0)
         {
             _validation.Text = "Enter a word before checking Collins.";
-            _validation.TextColor = Colors.Red;
+            _validation.TextColor = AppPalette.Vermillion;
             return;
         }
         Invalidate();
@@ -331,13 +354,13 @@ public sealed class WordEntryView : Border
             {
                 _confirmedWord = Score.Word;
                 _validation.Text = $"Confirmed valid: {_confirmedWord}";
-                _validation.TextColor = Colors.Green;
+                _validation.TextColor = AppPalette.Blue;
             }
             else
             {
                 _confirmedWord = null;
                 _validation.Text = $"Rejected: {Score.Word}";
-                _validation.TextColor = Colors.Red;
+                _validation.TextColor = AppPalette.Vermillion;
             }
             Changed?.Invoke(this, EventArgs.Empty);
         }));
@@ -358,8 +381,8 @@ public sealed class CollinsCheckPage : ContentPage
             Padding = new Thickness(12, 8)
         };
         var web = new WebView { Source = "https://scrabble.collinsdictionary.com/check/" };
-        var accept = new Button { Text = "Accept word", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White };
-        var reject = new Button { Text = "Reject word", BackgroundColor = Colors.DarkRed, TextColor = Colors.White };
+        var accept = new Button { Text = "Accept word", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
+        var reject = new Button { Text = "Reject word", BackgroundColor = AppPalette.Vermillion, TextColor = Colors.White };
 
         async Task Finish(bool accepted)
         {

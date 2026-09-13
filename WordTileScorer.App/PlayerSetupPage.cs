@@ -18,7 +18,7 @@ public sealed class PlayerSetupPage : ContentPage
             if (_players.Children.Count < 8) AddPlayerRow(string.Empty);
             else await DisplayAlert("Maximum players", "A game can contain no more than eight players.", "OK");
         };
-        var start = new Button { Text = "Start game", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White };
+        var start = new Button { Text = "Start game", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
         start.Clicked += StartClicked;
 
         Content = new ScrollView
