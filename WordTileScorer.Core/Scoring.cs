@@ -127,10 +127,10 @@ public sealed class GameEngine
         EnsurePlayable(game);
         if (scores.Count == 0 || scores.Any(s => s.Letters.Count == 0))
             throw new InvalidOperationException("Enter every word or use Pass.");
-        var tiles = (placedTiles ?? []).Select(NormalizeTile).ToArray();
-        if (tiles.Length > 7 && !allowExcessTiles)
-            throw new InvalidOperationException("A player can place no more than seven rack tiles in one turn.");
-        ValidateWordsCanBeFormed(game, scores, tiles);
+        var rackTiles = (placedTiles ?? []).Select(NormalizeTile).ToArray();
+        if (rackTiles.Length > 7 && !allowExcessTiles)
+            throw new InvalidOperationException("A rack can contain no more than seven tiles.");
+        var tiles = ResolvePlacedTiles(game, scores, rackTiles);
         var shortages = TileShortages(game, tiles);
         if (shortages.Count > 0 && !allowExcessTiles)
             throw new TileLimitException(shortages);
@@ -161,29 +161,40 @@ public sealed class GameEngine
     public static void ValidateWordsCanBeFormed(
         GameState game,
         IReadOnlyList<WordScoreBuilder> words,
-        IReadOnlyList<char> placedTiles)
+        IReadOnlyList<char> rackTiles)
+        => ResolvePlacedTiles(game, words, rackTiles);
+
+    private static IReadOnlyList<char> ResolvePlacedTiles(
+        GameState game,
+        IReadOnlyList<WordScoreBuilder> words,
+        IReadOnlyList<char> rackTiles)
     {
-        if (words.Count == 0) return;
-        var normalizedPlaced = placedTiles.Select(NormalizeTile).ToArray();
+        if (words.Count == 0) return [];
+        var normalizedRack = rackTiles.Select(NormalizeTile).ToList();
         var boardTiles = game.Turns.SelectMany(turn => turn.PlacedTiles ?? []).Select(NormalizeTile).ToArray();
 
         var mainRemainder = LetterCounts(words[0].Word);
-        var placedBlanks = normalizedPlaced.Count(tile => tile == '?');
-        foreach (var tile in normalizedPlaced.Where(tile => tile != '?'))
-        {
-            if (!Take(mainRemainder, tile))
-                throw new InvalidOperationException($"The main word {words[0].Word} does not contain every tile entered as placed from the rack.");
-        }
-        while (placedBlanks-- > 0)
-        {
-            if (!TakeAny(mainRemainder))
-                throw new InvalidOperationException($"The main word {words[0].Word} is shorter than the number of tiles entered as placed.");
-        }
-        EnsureRemainderExistsOnBoard(words[0].Word, mainRemainder, boardTiles);
+        foreach (var tile in boardTiles.Where(tile => tile != '?')) Take(mainRemainder, tile);
+        var boardBlanks = boardTiles.Count(tile => tile == '?');
+        while (boardBlanks-- > 0) TakeAny(mainRemainder);
 
-        var availableForCrossings = boardTiles.Concat(normalizedPlaced).ToArray();
+        var usedFromRack = new List<char>();
+        foreach (var letter in mainRemainder.Keys.ToArray())
+            while (mainRemainder.GetValueOrDefault(letter) > 0)
+            {
+                var exactIndex = normalizedRack.IndexOf(letter);
+                var rackIndex = exactIndex >= 0 ? exactIndex : normalizedRack.IndexOf('?');
+                if (rackIndex < 0)
+                    throw new InvalidOperationException($"The word {words[0].Word} cannot be made from the rack tiles and tiles already recorded on the board.");
+                usedFromRack.Add(normalizedRack[rackIndex]);
+                normalizedRack.RemoveAt(rackIndex);
+                Take(mainRemainder, letter);
+            }
+
+        var availableForCrossings = boardTiles.Concat(usedFromRack).ToArray();
         foreach (var word in words.Skip(1))
             EnsureWordUsesAvailableTiles(word.Word, availableForCrossings);
+        return usedFromRack;
     }
 
     private static void EnsureWordUsesAvailableTiles(string word, IReadOnlyList<char> availableTiles)
@@ -194,15 +205,6 @@ public sealed class GameEngine
         while (blanks-- > 0) TakeAny(needed);
         if (needed.Values.Sum() > 0)
             throw new InvalidOperationException($"The word {word} uses letters that are not among the current rack tiles or tiles already recorded on the board.");
-    }
-
-    private static void EnsureRemainderExistsOnBoard(string word, Dictionary<char, int> remainder, IReadOnlyList<char> boardTiles)
-    {
-        var blanks = boardTiles.Count(tile => tile == '?');
-        foreach (var tile in boardTiles.Where(tile => tile != '?')) Take(remainder, tile);
-        while (blanks-- > 0) TakeAny(remainder);
-        if (remainder.Values.Sum() > 0)
-            throw new InvalidOperationException($"The word {word} requires more letters than the placed rack tiles and previously recorded board tiles provide.");
     }
 
     private static Dictionary<char, int> LetterCounts(string word) => word

@@ -12,7 +12,7 @@ public sealed class GamePage : ContentPage
     private readonly Border _activePlayerCard;
     private readonly VerticalStackLayout _totals = new() { Spacing = 4 };
     private readonly VerticalStackLayout _words = new() { Spacing = 14 };
-    private readonly Entry _placedTiles = new() { Placeholder = "Tiles placed from rack, e.g. CAT (? = blank)", CharacterSpacing = 2 };
+    private readonly Entry _placedTiles = new() { Placeholder = "All tiles currently on rack, e.g. CATERS?", CharacterSpacing = 2 };
     private readonly Label _tileStatus = new() { TextColor = AppPalette.Slate };
     private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
     private readonly Button _record = new() { Text = "Record turn", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
@@ -74,8 +74,8 @@ public sealed class GamePage : ContentPage
                     _activePlayerCard, _totals,
                     new BoxView { HeightRequest = 1, Color = Colors.Gray },
                     new Label { Text = "Words made by this play", FontSize = 20, FontAttributes = FontAttributes.Bold },
-                    new Label { Text = "Tiles physically placed from the rack", FontAttributes = FontAttributes.Bold },
-                    new Label { Text = "Enter each new rack tile once. Do not repeat a tile merely because it also forms a crossing word." },
+                    new Label { Text = "Current rack", FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Enter all available rack tiles in any order. The app determines which ones the word uses." },
                     _placedTiles, _tileStatus, tileUsage,
                     new Label { Text = "Enter a complete word. Select one or more letters, apply one letter premium to them, then choose any word premiums covered." },
                     _words, addWord, _turnTotal, _record, pass, undo, finish
@@ -120,14 +120,14 @@ public sealed class GamePage : ContentPage
             var playerName = _game.CurrentPlayer.Name;
             var tiles = ParsedPlacedTiles();
             if (tiles.Length == 0)
-                throw new InvalidOperationException("Enter the tiles physically placed from the rack.");
+                throw new InvalidOperationException("Enter the tiles currently available on the rack.");
             var shortages = GameEngine.TileShortages(_game, tiles);
             var overRack = tiles.Length > 7;
             var allowExcess = false;
             if (shortages.Count > 0 || overRack)
             {
                 var details = new List<string>();
-                if (overRack) details.Add($"This turn contains {tiles.Length} rack tiles; the rack maximum is 7.");
+                if (overRack) details.Add($"The rack contains {tiles.Length} tiles; the maximum is 7.");
                 details.AddRange(shortages.Select(x => $"{TileName(x.Key)} exceeds the set by {x.Value}."));
                 allowExcess = await DisplayAlert("Tile limit exceeded", string.Join("\n", details) + "\n\nAllow this play anyway?", "Allow", "Cancel");
                 if (!allowExcess) return;
@@ -165,7 +165,7 @@ public sealed class GamePage : ContentPage
         if (_placedTiles.Text != normalized) { _placedTiles.Text = normalized; return; }
         var shortages = GameEngine.TileShortages(_game, normalized);
         _tileStatus.Text = shortages.Count == 0
-            ? $"Rack tiles entered: {normalized.Length}/7"
+            ? $"Rack tiles available: {normalized.Length}/7 (order does not matter)"
             : $"CHECK REQUIRED: {string.Join(", ", shortages.Select(x => $"{TileName(x.Key)} over by {x.Value}"))}";
         _tileStatus.TextColor = shortages.Count == 0 ? AppPalette.Slate : AppPalette.Vermillion;
         RefreshPendingTurn();

@@ -15,7 +15,8 @@ var tests = new (string Name, Action Run)[]
     ("tile shortages are detected", TileShortagesDetected),
     ("seven placed tiles earn bingo bonus", SevenTileBonus),
     ("opening word cannot exceed placed tiles", OpeningWordCannotExceedPlacedTiles),
-    ("existing board tiles can extend a word", ExistingBoardTilesCanExtendWord)
+    ("existing board tiles can extend a word", ExistingBoardTilesCanExtendWord),
+    ("rack order does not matter and unused tiles remain unused", RackOrderAndUnusedTiles)
 };
 
 var failed = 0;
@@ -168,6 +169,18 @@ static void ExistingBoardTilesCanExtendWord()
     var extension = new WordScoreBuilder(); extension.SetWord("CATER");
     new GameEngine().RecordWords(game, [extension], "ER".ToCharArray());
     Equal(5, GameEngine.UsedTiles(game).Values.Sum());
+}
+
+static void RackOrderAndUnusedTiles()
+{
+    var game = CreateGameForTileLimit();
+    var word = new WordScoreBuilder(); word.SetWord("CAT");
+    new GameEngine().RecordWords(game, [word], "ZXTCAYQ".ToCharArray());
+    var used = GameEngine.UsedTiles(game);
+    Equal(3, used.Values.Sum());
+    Equal(1, used['C']);
+    Equal(1, used['A']);
+    Equal(1, used['T']);
 }
 
 static void Throws<TException>(Action action) where TException : Exception
