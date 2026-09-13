@@ -1,2 +1,45 @@
-# word-tile-scorer
-Scrabble Management 
+# Word Tile Scorer
+
+Android-first scorekeeper for word-tile games, implemented with a shared C# core so Windows and Apple releases can reuse the rules and data model.
+
+## Confirmed first implementation slice
+
+- 2–8 named players.
+- Player order can be moved up or down before a game.
+- Individual play or teams.
+- Four teams of two are supported; the turn order remains the arranged player order, allowing `A1, B1, C1, D1, A2, B2, C2, D2`.
+- Score a word letter-by-letter.
+- Normal, double and triple letter multipliers.
+- Normal, double and triple word multipliers.
+- Pass for zero points.
+- Undo the most recent turn.
+- Running player contributions and team totals.
+- Offline game-state persistence on the device.
+- Mandatory temporary word-validation gate: the Collins checker is opened for the current word and players must confirm that it is valid before its score can be recorded.
+
+League and knockout entities are included in the shared model, but their user interfaces are deliberately not part of this first slice.
+
+## Projects
+
+- `WordTileScorer.Core`: platform-neutral models and scoring/game rules.
+- `WordTileScorer.App`: .NET MAUI Android application.
+- `WordTileScorer.Core.SelfTest`: dependency-free executable checks for scoring and turn order.
+
+## Build prerequisites
+
+.NET 10 SDK with the MAUI Android workload:
+
+```powershell
+dotnet workload install maui-android
+dotnet build .\WordTileScorer.App\WordTileScorer.App.csproj -f net10.0-android
+```
+
+Run the rule checks with:
+
+```powershell
+dotnet run --project .\WordTileScorer.Core.SelfTest
+```
+
+## Scoring boundary
+
+The intended dictionary is Collins Scrabble Words (CSW24). Until licensed programmatic access is available, the application opens the official Collins checker and requires the players to confirm its result. A changed word must be checked again; an unconfirmed word cannot be scored.
