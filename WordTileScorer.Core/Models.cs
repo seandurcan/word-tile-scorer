@@ -87,7 +87,11 @@ public sealed record Turn(
     DateTimeOffset PlayedAt,
     IReadOnlyList<PlayedWord> Words,
     int Score,
-    bool IsPass);
+    bool IsPass)
+{
+    public IReadOnlyList<char> PlacedTiles { get; init; } = [];
+    public int BingoBonus { get; init; }
+}
 
 public sealed record PlayedWord(
     string Word,

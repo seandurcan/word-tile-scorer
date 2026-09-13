@@ -9,7 +9,11 @@ var tests = new (string Name, Action Run)[]
     ("built-in English tile values", BuiltInTileValues),
     ("multiple words form one turn total", MultipleWordTotal),
     ("letter premium is replaced, not stacked", LetterPremiumIsExclusive),
-    ("multiple word premiums compound", MultipleWordPremiums)
+    ("multiple word premiums compound", MultipleWordPremiums),
+    ("English set contains 100 tiles", EnglishSetContains100Tiles),
+    ("crossing tile is consumed once", CrossingTileConsumedOnce),
+    ("tile shortages are detected", TileShortagesDetected),
+    ("seven placed tiles earn bingo bonus", SevenTileBonus)
 };
 
 var failed = 0;
@@ -106,6 +110,42 @@ static void MultipleWordPremiums()
     score.SetWordPremium(0, 2);
     score.SetWordPremium(1, 3);
     Equal(48, score.Total); // ((3×2)+1+1)×2×3
+}
+
+static void EnglishSetContains100Tiles() => Equal(100, EnglishTileDistribution.Counts.Values.Sum());
+
+static void CrossingTileConsumedOnce()
+{
+    var players = new[] { Player.Create("A"), Player.Create("B") };
+    var game = new GameEngine().CreateGame(players, GameMode.Individual);
+    var main = new WordScoreBuilder(); main.SetWord("CAT");
+    var crossing = new WordScoreBuilder(); crossing.SetWord("AT");
+    new GameEngine().RecordWords(game, [main, crossing], ['C', 'A', 'T']);
+    Equal(3, GameEngine.UsedTiles(game).Values.Sum());
+}
+
+static void TileShortagesDetected()
+{
+    var game = CreateGameForTileLimit();
+    var word = new WordScoreBuilder(); word.SetWord("BB");
+    new GameEngine().RecordWords(game, [word], ['B', 'B']);
+    var shortages = GameEngine.TileShortages(game, ['B']);
+    Equal(1, shortages['B']);
+}
+
+static GameState CreateGameForTileLimit()
+{
+    var players = new[] { Player.Create("A"), Player.Create("B") };
+    return new GameEngine().CreateGame(players, GameMode.Individual);
+}
+
+static void SevenTileBonus()
+{
+    var game = CreateGameForTileLimit();
+    var word = new WordScoreBuilder(); word.SetWord("READING");
+    var turn = new GameEngine().RecordWords(game, [word], "READING".ToCharArray());
+    Equal(word.Total + 50, turn.Score);
+    Equal(50, turn.BingoBonus);
 }
 
 static void Equal<T>(T expected, T actual)

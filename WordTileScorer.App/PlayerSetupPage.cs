@@ -37,7 +37,7 @@ public sealed class PlayerSetupPage : ContentPage
                         Spacing = 12,
                         Children = { new Label { Text = "Teams", VerticalOptions = LayoutOptions.Center }, _teamMode }
                     },
-                    new Label { Text = "In team mode, players 1 and 5 form Team A; 2 and 6 Team B; 3 and 7 Team C; 4 and 8 Team D. With fewer players, partners are assigned by alternating halves.", FontSize = 12 },
+                    new Label { Text = "In team mode, select each team's members from dropdown lists on the next screen. A selected player is removed from the other lists.", FontSize = 12 },
                     start
                 }
             }
@@ -81,14 +81,102 @@ public sealed class PlayerSetupPage : ContentPage
             {
                 if (players.Length < 4 || players.Length % 2 != 0)
                     throw new InvalidOperationException("Team mode requires 4, 6 or 8 players.");
-                var teamCount = players.Length / 2;
-                teams = Enumerable.Range(0, teamCount)
-                    .Select(i => Team.Create($"Team {(char)('A' + i)}", [players[i].Id, players[i + teamCount].Id]))
-                    .ToArray();
+                await Navigation.PushAsync(new TeamSetupPage(players));
+                return;
             }
             var game = new GameEngine().CreateGame(players, mode, teams);
             await Navigation.PushAsync(new GamePage(game));
         }
         catch (Exception ex) { await DisplayAlert("Cannot start game", ex.Message, "OK"); }
+    }
+}
+
+public sealed class TeamSetupPage : ContentPage
+{
+    private readonly IReadOnlyList<Player> _players;
+    private readonly List<(string TeamName, Picker First, Picker Second)> _rows = [];
+    private bool _refreshing;
+
+    public TeamSetupPage(IReadOnlyList<Player> players)
+    {
+        _players = players;
+        Title = "Select teams";
+        var rows = new VerticalStackLayout { Spacing = 12 };
+        for (var i = 0; i < players.Count / 2; i++)
+        {
+            var teamName = $"Team {(char)('A' + i)}";
+            var first = PlayerPicker("First player");
+            var second = PlayerPicker("Second player");
+            first.SelectedIndexChanged += (_, _) => RefreshAvailablePlayers();
+            second.SelectedIndexChanged += (_, _) => RefreshAvailablePlayers();
+            _rows.Add((teamName, first, second));
+            rows.Children.Add(new Border
+            {
+                Stroke = AppPalette.Blue, StrokeThickness = 1, Padding = 12,
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+                Content = new VerticalStackLayout
+                {
+                    Children = { new Label { Text = teamName, FontAttributes = FontAttributes.Bold, FontSize = 18 }, first, second }
+                }
+            });
+        }
+
+        var start = new Button { Text = "Start team game", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
+        start.Clicked += StartGame;
+        Content = new ScrollView
+        {
+            Content = new VerticalStackLayout
+            {
+                Padding = 20, Spacing = 14,
+                Children =
+                {
+                    new Label { Text = "Assign players to teams", FontSize = 24, FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Choose two players for each team. Only players not already assigned remain available." },
+                    rows, start
+                }
+            }
+        };
+        RefreshAvailablePlayers();
+    }
+
+    private static Picker PlayerPicker(string title) => new()
+    {
+        Title = title,
+        ItemDisplayBinding = new Binding(nameof(Player.Name))
+    };
+
+    private IEnumerable<Picker> Pickers() => _rows.SelectMany(row => new[] { row.First, row.Second });
+
+    private void RefreshAvailablePlayers()
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        var pickers = Pickers().ToArray();
+        foreach (var picker in pickers)
+        {
+            var current = picker.SelectedItem as Player;
+            var assignedElsewhere = pickers.Where(other => other != picker)
+                .Select(other => other.SelectedItem as Player)
+                .Where(player => player is not null)
+                .Select(player => player!.Id)
+                .ToHashSet();
+            picker.ItemsSource = _players.Where(player => player.Id == current?.Id || !assignedElsewhere.Contains(player.Id)).ToList();
+            picker.SelectedItem = current;
+        }
+        _refreshing = false;
+    }
+
+    private async void StartGame(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (Pickers().Any(picker => picker.SelectedItem is not Player))
+                throw new InvalidOperationException("Select two players for every team.");
+            var teams = _rows.Select(row => Team.Create(row.TeamName,
+                [((Player)row.First.SelectedItem).Id, ((Player)row.Second.SelectedItem).Id])).ToArray();
+            var game = new GameEngine().CreateGame(_players, GameMode.Teams, teams);
+            await Navigation.PushAsync(new GamePage(game));
+        }
+        catch (Exception ex) { await DisplayAlert("Cannot start team game", ex.Message, "OK"); }
     }
 }

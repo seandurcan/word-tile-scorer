@@ -24,6 +24,11 @@ Android-first scorekeeper for word-tile games, implemented with a shared C# core
 - Record turn always responds: it either explains missing input or confirms the player, recorded score and next player.
 - The active player is displayed in a prominent turn card with team and turn number.
 - The interface uses a high-contrast colour-blind-safe navy, blue, amber and neutral palette; status is never communicated by colour alone.
+- Standard 100-tile English distribution and per-letter usage are tracked from the rack tiles physically placed each turn. A crossing tile shared by several new words is counted once.
+- Attempts to exceed the rack or set inventory show the exact problem and require an explicit Allow or Cancel decision.
+- Playing all seven rack tiles adds the official 50-point bonus.
+- Word premiums use bottom-aligned Double Word and Treble Word buttons with visible counts and a checked three-square board maximum.
+- Team members are chosen from dropdown lists; assigned players disappear from every other dropdown.
 
 League and knockout entities are included in the shared model, but their user interfaces are deliberately not part of this first slice.
 

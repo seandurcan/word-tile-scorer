@@ -12,6 +12,8 @@ public sealed class GamePage : ContentPage
     private readonly Border _activePlayerCard;
     private readonly VerticalStackLayout _totals = new() { Spacing = 4 };
     private readonly VerticalStackLayout _words = new() { Spacing = 14 };
+    private readonly Entry _placedTiles = new() { Placeholder = "Tiles placed from rack, e.g. CAT (? = blank)", CharacterSpacing = 2 };
+    private readonly Label _tileStatus = new() { TextColor = AppPalette.Slate };
     private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
     private readonly Button _record = new() { Text = "Record turn", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
 
@@ -40,6 +42,9 @@ public sealed class GamePage : ContentPage
 
         var addWord = new Button { Text = "Add another word" };
         addWord.Clicked += (_, _) => AddWord();
+        _placedTiles.TextChanged += PlacedTilesChanged;
+        var tileUsage = new Button { Text = "View tile usage" };
+        tileUsage.Clicked += async (_, _) => await DisplayAlert("Tiles used", TileUsageText(), "OK");
         _record.Clicked += RecordTurn;
         var pass = new Button { Text = "Pass (0)" };
         pass.Clicked += async (_, _) => { _engine.Pass(_game); await AfterTurn(); };
@@ -69,6 +74,9 @@ public sealed class GamePage : ContentPage
                     _activePlayerCard, _totals,
                     new BoxView { HeightRequest = 1, Color = Colors.Gray },
                     new Label { Text = "Words made by this play", FontSize = 20, FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Tiles physically placed from the rack", FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Enter each new rack tile once. Do not repeat a tile merely because it also forms a crossing word." },
+                    _placedTiles, _tileStatus, tileUsage,
                     new Label { Text = "Enter a complete word. Select one or more letters, apply one letter premium to them, then choose any word premiums covered." },
                     _words, addWord, _turnTotal, _record, pass, undo, finish
                 }
@@ -110,9 +118,24 @@ public sealed class GamePage : ContentPage
             if (editors.Any(x => !x.IsConfirmedValid))
                 throw new InvalidOperationException("Check every entered word with Collins and select Accept word before recording the turn.");
             var playerName = _game.CurrentPlayer.Name;
-            var turn = _engine.RecordWords(_game, editors.Select(x => x.Score).ToArray());
+            var tiles = ParsedPlacedTiles();
+            if (tiles.Length == 0)
+                throw new InvalidOperationException("Enter the tiles physically placed from the rack.");
+            var shortages = GameEngine.TileShortages(_game, tiles);
+            var overRack = tiles.Length > 7;
+            var allowExcess = false;
+            if (shortages.Count > 0 || overRack)
+            {
+                var details = new List<string>();
+                if (overRack) details.Add($"This turn contains {tiles.Length} rack tiles; the rack maximum is 7.");
+                details.AddRange(shortages.Select(x => $"{TileName(x.Key)} exceeds the set by {x.Value}."));
+                allowExcess = await DisplayAlert("Tile limit exceeded", string.Join("\n", details) + "\n\nAllow this play anyway?", "Allow", "Cancel");
+                if (!allowExcess) return;
+            }
+            var turn = _engine.RecordWords(_game, editors.Select(x => x.Score).ToArray(), tiles, allowExcess);
             await AfterTurn();
-            await DisplayAlert("Turn recorded", $"{playerName}: {turn.Score} points.\nNext turn: {_game.CurrentPlayer.Name}.", "OK");
+            var bonus = turn.BingoBonus > 0 ? $" (includes {turn.BingoBonus}-point seven-tile bonus)" : string.Empty;
+            await DisplayAlert("Turn recorded", $"{playerName}: {turn.Score} points{bonus}.\nNext turn: {_game.CurrentPlayer.Name}.", "OK");
         }
         catch (Exception ex) { await DisplayAlert("Cannot record turn", ex.Message, "OK"); }
     }
@@ -120,6 +143,7 @@ public sealed class GamePage : ContentPage
     private async Task AfterTurn()
     {
         await Save();
+        _placedTiles.Text = string.Empty;
         _words.Children.Clear();
         AddWord();
         RefreshGame();
@@ -128,8 +152,35 @@ public sealed class GamePage : ContentPage
     private void RefreshPendingTurn()
     {
         var editors = Editors().Where(x => x.HasWord).ToArray();
-        _turnTotal.Text = $"Turn total: {editors.Sum(x => x.Score.Total)}";
+        var tileCount = ParsedPlacedTiles().Length;
+        var bonus = tileCount == 7 ? 50 : 0;
+        _turnTotal.Text = $"Turn total: {editors.Sum(x => x.Score.Total) + bonus}" + (bonus > 0 ? " (includes 50-point bonus)" : string.Empty);
     }
+
+    private void PlacedTilesChanged(object? sender, TextChangedEventArgs e)
+    {
+        var normalized = new string((e.NewTextValue ?? string.Empty)
+            .Where(c => c == '?' || c is >= 'A' and <= 'Z' or >= 'a' and <= 'z')
+            .Select(char.ToUpperInvariant).ToArray());
+        if (_placedTiles.Text != normalized) { _placedTiles.Text = normalized; return; }
+        var shortages = GameEngine.TileShortages(_game, normalized);
+        _tileStatus.Text = shortages.Count == 0
+            ? $"Rack tiles entered: {normalized.Length}/7"
+            : $"CHECK REQUIRED: {string.Join(", ", shortages.Select(x => $"{TileName(x.Key)} over by {x.Value}"))}";
+        _tileStatus.TextColor = shortages.Count == 0 ? AppPalette.Slate : AppPalette.Vermillion;
+        RefreshPendingTurn();
+    }
+
+    private char[] ParsedPlacedTiles() => (_placedTiles.Text ?? string.Empty).ToCharArray();
+
+    private string TileUsageText()
+    {
+        var used = GameEngine.UsedTiles(_game);
+        return string.Join("\n", EnglishTileDistribution.Counts.Select(x =>
+            $"{TileName(x.Key)}: {used.GetValueOrDefault(x.Key)} used / {x.Value} available"));
+    }
+
+    private static string TileName(char tile) => tile == '?' ? "Blank" : tile.ToString();
 
     private void RefreshGame()
     {
@@ -171,16 +222,14 @@ public sealed class WordEntryView : Border
     private readonly HorizontalStackLayout _letterButtons = new() { Spacing = 6 };
     private readonly Label _selected = new() { Text = "Select one or more letters above" };
     private readonly VerticalStackLayout _letterPremiumList = new() { Spacing = 3 };
-    private readonly Picker[] _wordPremiums = Enumerable.Range(1, 3).Select(number => new Picker
-    {
-        Title = $"Word premium {number}",
-        ItemsSource = new[] { "No word premium", "Double word", "Triple word" },
-        SelectedIndex = 0
-    }).ToArray();
+    private readonly Button _doubleWord = new() { Text = "Double Word (0)", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
+    private readonly Button _trebleWord = new() { Text = "Treble Word (0)", BackgroundColor = AppPalette.Amber, TextColor = AppPalette.Navy };
+    private readonly Label _wordPremiumStatus = new() { Text = "No word premium applied", TextColor = AppPalette.Slate };
+    private int _doubleWordCount;
+    private int _trebleWordCount;
     private readonly Label _calculation = new() { FontSize = 17 };
     private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = AppPalette.Amber };
     private readonly HashSet<int> _selectedLetters = [];
-    private bool _updating;
     private string? _confirmedWord;
     private int _number;
 
@@ -199,16 +248,10 @@ public sealed class WordEntryView : Border
         StrokeThickness = 1;
         Padding = 12;
         _word.TextChanged += WordChanged;
-        for (var slot = 0; slot < _wordPremiums.Length; slot++)
-        {
-            var premiumSlot = slot;
-            _wordPremiums[slot].SelectedIndexChanged += (_, _) =>
-            {
-                if (_updating) return;
-                Score.SetWordPremium(premiumSlot, _wordPremiums[premiumSlot].SelectedIndex + 1);
-                RefreshCalculation();
-            };
-        }
+        _doubleWord.Clicked += (_, _) => AddWordPremium(2);
+        _trebleWord.Clicked += (_, _) => AddWordPremium(3);
+        var clearWordPremiums = new Button { Text = "Clear word premiums" };
+        clearWordPremiums.Clicked += (_, _) => ClearWordPremiums();
 
         var doubleLetter = PremiumButton("Double letter", 2);
         var tripleLetter = PremiumButton("Triple letter", 3);
@@ -228,11 +271,58 @@ public sealed class WordEntryView : Border
                 _selected,
                 _letterPremiumList,
                 new HorizontalStackLayout { Spacing = 6, Children = { doubleLetter, tripleLetter } },
-                new Label { Text = "Word premiums (use another row only when the word covers another premium square)" },
-                _wordPremiums[0], _wordPremiums[1], _wordPremiums[2], _calculation, _validation,
-                check, remove
+                _calculation, _validation, check, remove,
+                new Label { Text = "Word premiums", FontAttributes = FontAttributes.Bold },
+                _wordPremiumStatus,
+                new HorizontalStackLayout
+                {
+                    Spacing = 6, HorizontalOptions = LayoutOptions.Center,
+                    Children = { _doubleWord, _trebleWord }
+                },
+                clearWordPremiums
             }
         };
+        RefreshCalculation();
+    }
+
+    private void AddWordPremium(int multiplier)
+    {
+        var individualCount = multiplier == 2 ? _doubleWordCount : _trebleWordCount;
+        if (individualCount >= 3)
+        {
+            _wordPremiumStatus.Text = $"CHECK: {(multiplier == 2 ? "Double" : "Treble")} Word is already at its maximum of 3.";
+            _wordPremiumStatus.TextColor = AppPalette.Vermillion;
+            return;
+        }
+        if (_doubleWordCount + _trebleWordCount >= 3)
+        {
+            _wordPremiumStatus.Text = "CHECK: a word cannot cover more than 3 word-premium squares on the standard board.";
+            _wordPremiumStatus.TextColor = AppPalette.Vermillion;
+            return;
+        }
+        if (multiplier == 2) _doubleWordCount++; else _trebleWordCount++;
+        ApplyWordPremiumCounts();
+    }
+
+    private void ClearWordPremiums()
+    {
+        _doubleWordCount = 0;
+        _trebleWordCount = 0;
+        ApplyWordPremiumCounts();
+    }
+
+    private void ApplyWordPremiumCounts()
+    {
+        var slot = 0;
+        for (var i = 0; i < _doubleWordCount; i++) Score.SetWordPremium(slot++, 2);
+        for (var i = 0; i < _trebleWordCount; i++) Score.SetWordPremium(slot++, 3);
+        while (slot < 3) Score.SetWordPremium(slot++, 1);
+        _doubleWord.Text = $"Double Word ({_doubleWordCount})";
+        _trebleWord.Text = $"Treble Word ({_trebleWordCount})";
+        _wordPremiumStatus.Text = _doubleWordCount + _trebleWordCount == 0
+            ? "No word premium applied"
+            : $"Applied: Double Word ×{_doubleWordCount}; Treble Word ×{_trebleWordCount}";
+        _wordPremiumStatus.TextColor = AppPalette.Slate;
         RefreshCalculation();
     }
 

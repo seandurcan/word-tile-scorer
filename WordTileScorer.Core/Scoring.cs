@@ -78,6 +78,18 @@ public static class EnglishTileValues
     }
 }
 
+public static class EnglishTileDistribution
+{
+    public static readonly IReadOnlyDictionary<char, int> Counts = new Dictionary<char, int>
+    {
+        ['A'] = 9, ['B'] = 2, ['C'] = 2, ['D'] = 4, ['E'] = 12, ['F'] = 2,
+        ['G'] = 3, ['H'] = 2, ['I'] = 9, ['J'] = 1, ['K'] = 1, ['L'] = 4,
+        ['M'] = 2, ['N'] = 6, ['O'] = 8, ['P'] = 2, ['Q'] = 1, ['R'] = 6,
+        ['S'] = 4, ['T'] = 6, ['U'] = 4, ['V'] = 2, ['W'] = 2, ['X'] = 1,
+        ['Y'] = 2, ['Z'] = 1, ['?'] = 2
+    };
+}
+
 public sealed class GameEngine
 {
     public GameState CreateGame(
@@ -105,13 +117,56 @@ public sealed class GameEngine
         };
     }
 
-    public Turn RecordWords(GameState game, IReadOnlyList<WordScoreBuilder> scores, DateTimeOffset? playedAt = null)
+    public Turn RecordWords(
+        GameState game,
+        IReadOnlyList<WordScoreBuilder> scores,
+        IReadOnlyList<char>? placedTiles = null,
+        bool allowExcessTiles = false,
+        DateTimeOffset? playedAt = null)
     {
         EnsurePlayable(game);
         if (scores.Count == 0 || scores.Any(s => s.Letters.Count == 0))
             throw new InvalidOperationException("Enter every word or use Pass.");
+        var tiles = (placedTiles ?? []).Select(NormalizeTile).ToArray();
+        if (tiles.Length > 7 && !allowExcessTiles)
+            throw new InvalidOperationException("A player can place no more than seven rack tiles in one turn.");
+        var shortages = TileShortages(game, tiles);
+        if (shortages.Count > 0 && !allowExcessTiles)
+            throw new TileLimitException(shortages);
         var words = scores.Select(s => s.Build()).ToArray();
-        return AddTurn(game, words, checked(words.Sum(w => w.Score)), false, playedAt);
+        var bingo = tiles.Length == 7 ? 50 : 0;
+        return AddTurn(game, words, checked(words.Sum(w => w.Score) + bingo), false, playedAt) with
+        {
+            PlacedTiles = tiles,
+            BingoBonus = bingo
+        };
+    }
+
+    public static IReadOnlyDictionary<char, int> UsedTiles(GameState game) => game.Turns
+        .SelectMany(t => t.PlacedTiles ?? [])
+        .GroupBy(NormalizeTile)
+        .ToDictionary(group => group.Key, group => group.Count());
+
+    public static IReadOnlyDictionary<char, int> TileShortages(GameState game, IEnumerable<char> proposedTiles)
+    {
+        var used = UsedTiles(game);
+        return proposedTiles.Select(NormalizeTile)
+            .GroupBy(tile => tile)
+            .Select(group => new
+            {
+                Tile = group.Key,
+                Excess = used.GetValueOrDefault(group.Key) + group.Count() - EnglishTileDistribution.Counts[group.Key]
+            })
+            .Where(item => item.Excess > 0)
+            .ToDictionary(item => item.Tile, item => item.Excess);
+    }
+
+    private static char NormalizeTile(char tile)
+    {
+        var normalized = char.ToUpperInvariant(tile);
+        if (normalized != '?' && !EnglishTileDistribution.Counts.ContainsKey(normalized))
+            throw new ArgumentException($"'{tile}' is not a valid English tile.", nameof(tile));
+        return normalized;
     }
 
     public Turn Pass(GameState game, DateTimeOffset? playedAt = null)
@@ -163,4 +218,10 @@ public sealed class GameEngine
         if (assigned.Length != players.Count)
             throw new ArgumentException("Every player must belong to exactly one team.", nameof(teams));
     }
+}
+
+public sealed class TileLimitException(IReadOnlyDictionary<char, int> shortages)
+    : InvalidOperationException("The proposed play exceeds the available tile distribution.")
+{
+    public IReadOnlyDictionary<char, int> Shortages { get; } = shortages;
 }
