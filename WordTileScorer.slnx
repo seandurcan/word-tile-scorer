@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="WordTileScorer.Core/WordTileScorer.Core.csproj" />
+  <Project Path="WordTileScorer.App/WordTileScorer.App.csproj" />
+  <Project Path="WordTileScorer.Core.SelfTest/WordTileScorer.Core.SelfTest.csproj" />
+</Solution>
