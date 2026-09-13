@@ -2,6 +2,8 @@
 
 Android-first scorekeeper for word-tile games, implemented with a shared C# core so Windows and Apple releases can reuse the rules and data model.
 
+Development APKs use a stable development application ID and signing key, allowing subsequent test versions to install as normal updates. Production will use a separate private signing identity.
+
 ## Confirmed first implementation slice
 
 - 2–8 named players.
