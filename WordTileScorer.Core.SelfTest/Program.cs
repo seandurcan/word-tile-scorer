@@ -96,7 +96,7 @@ static void LetterPremiumIsExclusive()
     var score = new WordScoreBuilder(); score.SetWord("BOX");
     score.SetLetterMultiplier(0, 2);
     score.SetLetterMultiplier(0, 3);
-    Equal(13, score.Total); // B is triple, not double then triple.
+    Equal(18, score.Total); // B is triple, not double then triple.
 }
 
 static void MultipleWordPremiums()
