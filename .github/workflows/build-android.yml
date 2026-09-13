@@ -42,7 +42,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WordTileScorer-Android-v0.2.1
+          name: WordTileScorer-Android-v0.2.2
           path: WordTileScorer.App/bin/Release/net10.0-android/publish/*.apk
           if-no-files-found: error
           retention-days: 30

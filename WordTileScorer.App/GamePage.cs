@@ -183,7 +183,6 @@ public sealed class WordEntryView : Border
             };
         }
 
-        var normalLetter = PremiumButton("Normal letter", 1);
         var doubleLetter = PremiumButton("Double letter", 2);
         var tripleLetter = PremiumButton("Triple letter", 3);
 
@@ -211,7 +210,7 @@ public sealed class WordEntryView : Border
                 _heading, _word,
                 new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _letterButtons },
                 _selected,
-                new HorizontalStackLayout { Spacing = 6, Children = { normalLetter, doubleLetter, tripleLetter } },
+                new HorizontalStackLayout { Spacing = 6, Children = { doubleLetter, tripleLetter } },
                 new Label { Text = "Word premiums (use another row only when the word covers another premium square)" },
                 _wordPremiums[0], _wordPremiums[1], _wordPremiums[2], _calculation, _validation,
                 check, new HorizontalStackLayout { Spacing = 8, Children = { valid, invalid } }, remove
