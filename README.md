@@ -10,6 +10,7 @@ Android-first scorekeeper for word-tile games, implemented with a shared C# core
 - Four teams of two are supported; the turn order remains the arranged player order, allowing `A1, B1, C1, D1, A2, B2, C2, D2`.
 - Enter a complete word; standard English tile values are supplied automatically.
 - All letters start at their ordinary value. Select one or several letters and apply one exclusive double-letter or triple-letter premium to all selected letters.
+- Selected tiles and their individual premiums are listed by tile position, so repeated letters remain distinguishable.
 - Apply the word multiplier only after all letter multipliers have been included.
 - Add and score further words created by the same play; the turn total is the sum of all words.
 - Normal, double and triple letter multipliers.
@@ -18,7 +19,7 @@ Android-first scorekeeper for word-tile games, implemented with a shared C# core
 - Undo the most recent turn.
 - Running player contributions and team totals.
 - Offline game-state persistence on the device.
-- Mandatory temporary word-validation gate: the Collins checker is opened for the current word and players must confirm that it is valid before its score can be recorded.
+- Mandatory temporary word-validation gate: Collins opens inside the app with explicit Accept word and Reject word controls before the score can be recorded.
 
 League and knockout entities are included in the shared model, but their user interfaces are deliberately not part of this first slice.
 

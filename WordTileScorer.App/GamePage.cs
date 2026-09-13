@@ -145,6 +145,7 @@ public sealed class WordEntryView : Border
     private readonly Entry _word = new() { Placeholder = "Enter complete word", CharacterSpacing = 2 };
     private readonly HorizontalStackLayout _letterButtons = new() { Spacing = 6 };
     private readonly Label _selected = new() { Text = "Select one or more letters above" };
+    private readonly VerticalStackLayout _letterPremiumList = new() { Spacing = 3 };
     private readonly Picker[] _wordPremiums = Enumerable.Range(1, 3).Select(number => new Picker
     {
         Title = $"Word premium {number}",
@@ -188,17 +189,6 @@ public sealed class WordEntryView : Border
 
         var check = new Button { Text = "Check this word with Collins" };
         check.Clicked += CheckWord;
-        var valid = new Button { Text = "Collins says VALID" };
-        valid.Clicked += (_, _) =>
-        {
-            if (Score.Letters.Count == 0) return;
-            _confirmedWord = Score.Word;
-            _validation.Text = $"Confirmed valid: {_confirmedWord}";
-            _validation.TextColor = Colors.Green;
-            Changed?.Invoke(this, EventArgs.Empty);
-        };
-        var invalid = new Button { Text = "NOT VALID" };
-        invalid.Clicked += (_, _) => { _word.Text = string.Empty; _word.Focus(); };
         var remove = new Button { Text = "Remove this word" };
         remove.Clicked += (_, _) => RemoveRequested?.Invoke(this, EventArgs.Empty);
 
@@ -210,10 +200,11 @@ public sealed class WordEntryView : Border
                 _heading, _word,
                 new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _letterButtons },
                 _selected,
+                _letterPremiumList,
                 new HorizontalStackLayout { Spacing = 6, Children = { doubleLetter, tripleLetter } },
                 new Label { Text = "Word premiums (use another row only when the word covers another premium square)" },
                 _wordPremiums[0], _wordPremiums[1], _wordPremiums[2], _calculation, _validation,
-                check, new HorizontalStackLayout { Spacing = 8, Children = { valid, invalid } }, remove
+                check, remove
             }
         };
         RefreshCalculation();
@@ -238,7 +229,7 @@ public sealed class WordEntryView : Border
             for (var i = 0; i < Score.Letters.Count; i++) AddLetterButton(i);
         }
         else while (Score.Letters.Count > 0) Score.RemoveLastLetter();
-        Invalidate(); RefreshCalculation();
+        Invalidate(); RefreshLetterSelectionList(); RefreshCalculation();
     }
 
     private void AddLetterButton(int index)
@@ -254,15 +245,35 @@ public sealed class WordEntryView : Border
         if (!_selectedLetters.Add(index)) _selectedLetters.Remove(index);
         _selected.Text = _selectedLetters.Count == 0
             ? "Select one or more letters above"
-            : $"Selected: {string.Join(", ", _selectedLetters.Order().Select(i => $"{Score.Letters[i].Letter}{i + 1}"))}";
-        RefreshLetterButtons();
+            : "Selected tiles — choose Double Letter or Triple Letter:";
+        RefreshLetterButtons(); RefreshLetterSelectionList();
     }
 
     private void ApplyLetterMultiplier(int multiplier)
     {
         if (_selectedLetters.Count == 0) return;
         foreach (var index in _selectedLetters) Score.SetLetterMultiplier(index, multiplier);
-        Invalidate(); RefreshLetterButtons(); RefreshCalculation();
+        _selectedLetters.Clear();
+        _selected.Text = "Select one or more letters above";
+        Invalidate(); RefreshLetterButtons(); RefreshLetterSelectionList(); RefreshCalculation();
+    }
+
+    private void RefreshLetterSelectionList()
+    {
+        _letterPremiumList.Children.Clear();
+        for (var i = 0; i < Score.Letters.Count; i++)
+        {
+            var letter = Score.Letters[i];
+            var status = letter.LetterMultiplier switch
+            {
+                2 => "Double Letter",
+                3 => "Triple Letter",
+                _ when _selectedLetters.Contains(i) => "Selected — choose a premium",
+                _ => null
+            };
+            if (status is not null)
+                _letterPremiumList.Children.Add(new Label { Text = $"Tile {i + 1}: {letter.Letter} — {status}" });
+        }
     }
 
     private void RefreshLetterButtons()
@@ -297,8 +308,66 @@ public sealed class WordEntryView : Border
         if (Score.Letters.Count == 0) return;
         Invalidate();
         await Clipboard.Default.SetTextAsync(Score.Word);
-        _validation.Text = $"{Score.Word} copied. Paste it into Collins, then return and select the result.";
+        _validation.Text = $"Checking {Score.Word} with Collins…";
         Changed?.Invoke(this, EventArgs.Empty);
-        await Launcher.Default.OpenAsync(new Uri("https://scrabble.collinsdictionary.com/check/"));
+        await Navigation.PushModalAsync(new CollinsCheckPage(Score.Word, accepted =>
+        {
+            if (accepted)
+            {
+                _confirmedWord = Score.Word;
+                _validation.Text = $"Confirmed valid: {_confirmedWord}";
+                _validation.TextColor = Colors.Green;
+            }
+            else
+            {
+                _confirmedWord = null;
+                _validation.Text = $"Rejected: {Score.Word}";
+                _validation.TextColor = Colors.Red;
+            }
+            Changed?.Invoke(this, EventArgs.Empty);
+        }));
+    }
+}
+
+public sealed class CollinsCheckPage : ContentPage
+{
+    private bool _completed;
+
+    public CollinsCheckPage(string word, Action<bool> completed)
+    {
+        Title = "Check with Collins";
+        var heading = new Label
+        {
+            Text = $"Check: {word}\nThe word is copied—paste it into the Collins search box.",
+            FontSize = 18,
+            Padding = new Thickness(12, 8)
+        };
+        var web = new WebView { Source = "https://scrabble.collinsdictionary.com/check/" };
+        var accept = new Button { Text = "Accept word", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White };
+        var reject = new Button { Text = "Reject word", BackgroundColor = Colors.DarkRed, TextColor = Colors.White };
+
+        async Task Finish(bool accepted)
+        {
+            if (_completed) return;
+            _completed = true;
+            completed(accepted);
+            await Navigation.PopModalAsync();
+        }
+
+        accept.Clicked += async (_, _) => await Finish(true);
+        reject.Clicked += async (_, _) => await Finish(false);
+
+        var actions = new HorizontalStackLayout
+        {
+            Padding = 12, Spacing = 8, HorizontalOptions = LayoutOptions.Center,
+            Children = { accept, reject }
+        };
+        Grid.SetRow(web, 1);
+        Grid.SetRow(actions, 2);
+        Content = new Grid
+        {
+            RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto) },
+            Children = { heading, web, actions }
+        };
     }
 }
