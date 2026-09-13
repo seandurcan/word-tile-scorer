@@ -135,7 +135,7 @@ public sealed class GameEngine
         if (shortages.Count > 0 && !allowExcessTiles)
             throw new TileLimitException(shortages);
         var words = scores.Select(s => s.Build()).ToArray();
-        var bingo = tiles.Length == 7 ? 50 : 0;
+        var bingo = tiles.Count == 7 ? 50 : 0;
         return AddTurn(game, words, checked(words.Sum(w => w.Score) + bingo), false, playedAt, tiles, bingo);
     }
 
