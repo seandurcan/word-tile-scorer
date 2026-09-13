@@ -10,6 +10,23 @@ public sealed class WordScoreBuilder
     public int Total => checked(Subtotal * WordMultiplier);
     public string Word => new(_letters.Select(x => x.Letter).ToArray());
 
+    public void SetWord(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word)) throw new ArgumentException("A word is required.", nameof(word));
+        _letters.Clear();
+        foreach (var letter in word.Trim().ToUpperInvariant())
+            AddLetter(letter, EnglishTileValues.ValueOf(letter));
+    }
+
+    public void SetLetterMultiplier(int letterIndex, int multiplier)
+    {
+        if (letterIndex < 0 || letterIndex >= _letters.Count) throw new ArgumentOutOfRangeException(nameof(letterIndex));
+        if (multiplier is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(multiplier));
+        _letters[letterIndex] = _letters[letterIndex] with { LetterMultiplier = multiplier };
+    }
+
+    public PlayedWord Build() => new(Word, _letters.ToArray(), WordMultiplier, Total);
+
     public void AddLetter(char letter, int baseValue, int letterMultiplier = 1)
     {
         if (!char.IsLetter(letter)) throw new ArgumentException("A letter is required.", nameof(letter));
@@ -27,6 +44,26 @@ public sealed class WordScoreBuilder
     {
         if (multiplier is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(multiplier));
         WordMultiplier = multiplier;
+    }
+}
+
+public static class EnglishTileValues
+{
+    private static readonly IReadOnlyDictionary<char, int> Values = new Dictionary<char, int>
+    {
+        ['A'] = 1, ['B'] = 3, ['C'] = 3, ['D'] = 2, ['E'] = 1, ['F'] = 4,
+        ['G'] = 2, ['H'] = 4, ['I'] = 1, ['J'] = 8, ['K'] = 5, ['L'] = 1,
+        ['M'] = 3, ['N'] = 1, ['O'] = 1, ['P'] = 3, ['Q'] = 10, ['R'] = 1,
+        ['S'] = 1, ['T'] = 1, ['U'] = 1, ['V'] = 4, ['W'] = 4, ['X'] = 8,
+        ['Y'] = 4, ['Z'] = 10
+    };
+
+    public static int ValueOf(char letter)
+    {
+        var normalized = char.ToUpperInvariant(letter);
+        return Values.TryGetValue(normalized, out var value)
+            ? value
+            : throw new ArgumentException($"'{letter}' is not an English letter.", nameof(letter));
     }
 }
 
@@ -57,17 +94,19 @@ public sealed class GameEngine
         };
     }
 
-    public Turn RecordWord(GameState game, WordScoreBuilder score, DateTimeOffset? playedAt = null)
+    public Turn RecordWords(GameState game, IReadOnlyList<WordScoreBuilder> scores, DateTimeOffset? playedAt = null)
     {
         EnsurePlayable(game);
-        if (score.Letters.Count == 0) throw new InvalidOperationException("Enter at least one letter or use Pass.");
-        return AddTurn(game, score.Word, score.Letters.ToArray(), score.WordMultiplier, score.Total, false, playedAt);
+        if (scores.Count == 0 || scores.Any(s => s.Letters.Count == 0))
+            throw new InvalidOperationException("Enter every word or use Pass.");
+        var words = scores.Select(s => s.Build()).ToArray();
+        return AddTurn(game, words, checked(words.Sum(w => w.Score)), false, playedAt);
     }
 
     public Turn Pass(GameState game, DateTimeOffset? playedAt = null)
     {
         EnsurePlayable(game);
-        return AddTurn(game, string.Empty, [], 1, 0, true, playedAt);
+        return AddTurn(game, [], 0, true, playedAt);
     }
 
     public Turn UndoLastTurn(GameState game)
@@ -81,9 +120,7 @@ public sealed class GameEngine
 
     private static Turn AddTurn(
         GameState game,
-        string word,
-        IReadOnlyList<LetterPlay> letters,
-        int wordMultiplier,
+        IReadOnlyList<PlayedWord> words,
         int score,
         bool isPass,
         DateTimeOffset? playedAt)
@@ -91,7 +128,7 @@ public sealed class GameEngine
         var player = game.CurrentPlayer;
         var turn = new Turn(
             Guid.NewGuid(), player.Id, game.TeamFor(player.Id)?.Id,
-            playedAt ?? DateTimeOffset.Now, word, letters, wordMultiplier, score, isPass);
+            playedAt ?? DateTimeOffset.Now, words, score, isPass);
         game.Turns.Add(turn);
         game.CurrentTurnIndex = (game.CurrentTurnIndex + 1) % game.TurnOrder.Count;
         return turn;
