@@ -5,7 +5,9 @@ var tests = new (string Name, Action Run)[]
     ("letter and word multipliers", ScoreMultipliers),
     ("eight-player alternating order", EightPlayerOrder),
     ("undo restores current player", UndoRestoresPlayer),
-    ("team totals include both partners", TeamTotals)
+    ("team totals include both partners", TeamTotals),
+    ("built-in English tile values", BuiltInTileValues),
+    ("multiple words form one turn total", MultipleWordTotal)
 };
 
 var failed = 0;
@@ -60,10 +62,31 @@ static void TeamTotals()
     var game = engine.CreateGame(players, GameMode.Teams, [teamA, teamB]);
     foreach (var value in new[] { 3, 5, 7, 11 })
     {
-        var score = new WordScoreBuilder(); score.AddLetter('X', value); engine.RecordWord(game, score);
+        var score = new WordScoreBuilder(); score.AddLetter('X', value); engine.RecordWords(game, [score]);
     }
     Equal(10, game.TeamTotal(teamA.Id));
     Equal(16, game.TeamTotal(teamB.Id));
+}
+
+static void BuiltInTileValues()
+{
+    var score = new WordScoreBuilder();
+    score.SetWord("QUIZ");
+    Equal(22, score.Total);
+    score.SetLetterMultiplier(3, 3);
+    Equal(42, score.Total);
+    score.SetWordMultiplier(2);
+    Equal(84, score.Total);
+}
+
+static void MultipleWordTotal()
+{
+    var players = new[] { Player.Create("A"), Player.Create("B") };
+    var game = new GameEngine().CreateGame(players, GameMode.Individual);
+    var first = new WordScoreBuilder(); first.SetWord("CAT"); first.SetLetterMultiplier(0, 2); first.SetWordMultiplier(2);
+    var second = new WordScoreBuilder(); second.SetWord("AT"); second.SetLetterMultiplier(0, 2);
+    var turn = new GameEngine().RecordWords(game, [first, second]);
+    Equal(19, turn.Score); // CAT: ((3×2)+1+1)×2=16; AT: (1×2)+1=3
 }
 
 static void Equal<T>(T expected, T actual)
