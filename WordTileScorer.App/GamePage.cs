@@ -7,49 +7,21 @@ public sealed class GamePage : ContentPage
 {
     private readonly GameState _game;
     private readonly GameEngine _engine = new();
-    private readonly WordScoreBuilder _score = new();
     private readonly Label _turn = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
-    private readonly Label _word = new() { FontSize = 26 };
-    private readonly Label _calculation = new() { FontSize = 18 };
-    private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = Colors.DarkOrange };
     private readonly VerticalStackLayout _totals = new() { Spacing = 4 };
-    private readonly Entry _letter = new() { Placeholder = "Letter", MaxLength = 1, WidthRequest = 80 };
-    private readonly Entry _value = new() { Placeholder = "Value", Keyboard = Keyboard.Numeric, WidthRequest = 90 };
-    private readonly Picker _letterMultiplier = new() { Title = "Letter multiplier", ItemsSource = new[] { "Normal", "Double letter", "Triple letter" }, SelectedIndex = 0 };
-    private readonly Picker _wordMultiplier = new() { Title = "Word multiplier", ItemsSource = new[] { "Normal", "Double word", "Triple word" }, SelectedIndex = 0 };
-    private readonly Button _record = new() { Text = "Record word", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White, IsEnabled = false };
-    private string? _confirmedWord;
+    private readonly VerticalStackLayout _words = new() { Spacing = 14 };
+    private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
+    private readonly Button _record = new() { Text = "Record turn", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White, IsEnabled = false };
 
     public GamePage(GameState game)
     {
         _game = game;
         Title = "Score game";
-        var addLetter = new Button { Text = "Add letter" };
-        addLetter.Clicked += AddLetter;
-        var removeLetter = new Button { Text = "Remove last letter" };
-        removeLetter.Clicked += (_, _) => { _score.RemoveLastLetter(); InvalidateWordCheck(); RefreshScore(); };
-        var checkWord = new Button { Text = "Check word with Collins" };
-        checkWord.Clicked += CheckWord;
-        var valid = new Button { Text = "Collins says VALID" };
-        valid.Clicked += async (_, _) =>
-        {
-            if (string.IsNullOrWhiteSpace(_score.Word))
-            {
-                await DisplayAlert("No word", "Enter the word before confirming it.", "OK");
-                return;
-            }
-            _confirmedWord = _score.Word;
-            _validation.Text = $"Confirmed valid: {_confirmedWord}";
-            _validation.TextColor = Colors.Green;
-            _record.IsEnabled = true;
-        };
-        var invalid = new Button { Text = "Collins says NOT VALID" };
-        invalid.Clicked += (_, _) =>
-        {
-            ResetScore();
-            _letter.Focus();
-        };
-        _record.Clicked += RecordWord;
+        AddWord();
+
+        var addWord = new Button { Text = "Add another word" };
+        addWord.Clicked += (_, _) => AddWord();
+        _record.Clicked += RecordTurn;
         var pass = new Button { Text = "Pass (0)" };
         pass.Clicked += async (_, _) => { _engine.Pass(_game); await AfterTurn(); };
         var undo = new Button { Text = "Undo last turn" };
@@ -68,11 +40,6 @@ public sealed class GamePage : ContentPage
             await Navigation.PopAsync();
         };
 
-        _wordMultiplier.SelectedIndexChanged += (_, _) =>
-        {
-            _score.SetWordMultiplier(_wordMultiplier.SelectedIndex + 1); InvalidateWordCheck(); RefreshScore();
-        };
-
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
@@ -82,82 +49,64 @@ public sealed class GamePage : ContentPage
                 {
                     _turn, _totals,
                     new BoxView { HeightRequest = 1, Color = Colors.Gray },
-                    new Label { Text = "Current word", FontAttributes = FontAttributes.Bold }, _word, _calculation, _validation,
-                    new HorizontalStackLayout { Spacing = 8, Children = { _letter, _value } },
-                    _letterMultiplier, addLetter, removeLetter, _wordMultiplier,
-                    checkWord,
-                    new HorizontalStackLayout { Spacing = 8, Children = { valid, invalid } },
-                    _record, pass, undo, finish
+                    new Label { Text = "Words made by this play", FontSize = 20, FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Enter a complete word. Select a letter to apply its letter multiplier, then select the word multiplier." },
+                    _words, addWord, _turnTotal, _record, pass, undo, finish
                 }
             }
         };
         RefreshGame();
     }
 
-    private async void AddLetter(object? sender, EventArgs e)
+    private void AddWord()
+    {
+        var editor = new WordEntryView(_words.Children.Count + 1);
+        editor.Changed += (_, _) => RefreshPendingTurn();
+        editor.RemoveRequested += (_, _) =>
+        {
+            if (_words.Children.Count <= 1) return;
+            _words.Children.Remove(editor);
+            RenumberWords();
+            RefreshPendingTurn();
+        };
+        _words.Children.Add(editor);
+        RefreshPendingTurn();
+    }
+
+    private void RenumberWords()
+    {
+        var number = 1;
+        foreach (var editor in Editors()) editor.Number = number++;
+    }
+
+    private IEnumerable<WordEntryView> Editors() => _words.Children.Cast<WordEntryView>();
+
+    private async void RecordTurn(object? sender, EventArgs e)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(_letter.Text) || !int.TryParse(_value.Text, out var value))
-                throw new InvalidOperationException("Enter one letter and its tile value.");
-            _score.AddLetter(_letter.Text[0], value, _letterMultiplier.SelectedIndex + 1);
-            InvalidateWordCheck();
-            _letter.Text = string.Empty; _value.Text = string.Empty; _letterMultiplier.SelectedIndex = 0;
-            _letter.Focus(); RefreshScore();
+            var editors = Editors().ToArray();
+            if (editors.Any(x => !x.IsConfirmedValid))
+                throw new InvalidOperationException("Every word must be checked and confirmed valid before recording the turn.");
+            _engine.RecordWords(_game, editors.Select(x => x.Score).ToArray());
+            await AfterTurn();
         }
-        catch (Exception ex) { await DisplayAlert("Cannot add letter", ex.Message, "OK"); }
-    }
-
-    private async void RecordWord(object? sender, EventArgs e)
-    {
-        try
-        {
-            if (!string.Equals(_confirmedWord, _score.Word, StringComparison.Ordinal))
-                throw new InvalidOperationException("Check this word with Collins and confirm that it is valid before recording its score.");
-            _engine.RecordWord(_game, _score); await AfterTurn();
-        }
-        catch (Exception ex) { await DisplayAlert("Cannot record word", ex.Message, "OK"); }
-    }
-
-    private async void CheckWord(object? sender, EventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(_score.Word))
-        {
-            await DisplayAlert("No word", "Enter the word before checking it.", "OK");
-            return;
-        }
-        InvalidateWordCheck();
-        await Launcher.Default.OpenAsync(new Uri("https://scrabble.collinsdictionary.com/check/"));
-        _validation.Text = $"Check {_score.Word} in Collins, then return and select its result.";
+        catch (Exception ex) { await DisplayAlert("Cannot record turn", ex.Message, "OK"); }
     }
 
     private async Task AfterTurn()
     {
         await Save();
-        ResetScore();
+        _words.Children.Clear();
+        AddWord();
         RefreshGame();
     }
 
-    private void ResetScore()
+    private void RefreshPendingTurn()
     {
-        while (_score.Letters.Count > 0) _score.RemoveLastLetter();
-        _score.SetWordMultiplier(1); _wordMultiplier.SelectedIndex = 0;
-        InvalidateWordCheck();
-        RefreshScore();
-    }
-
-    private void InvalidateWordCheck()
-    {
-        _confirmedWord = null;
-        _record.IsEnabled = false;
-        _validation.Text = "Word not yet checked";
-        _validation.TextColor = Colors.DarkOrange;
-    }
-
-    private void RefreshScore()
-    {
-        _word.Text = string.IsNullOrEmpty(_score.Word) ? "—" : _score.Word;
-        _calculation.Text = $"Letters: {_score.Subtotal}  ×  Word: {_score.WordMultiplier}  =  {_score.Total}";
+        var editors = Editors().ToArray();
+        _turnTotal.Text = $"Turn total: {editors.Sum(x => x.Score.Total)}";
+        _record.IsEnabled = editors.Length > 0 && editors.All(x => x.IsConfirmedValid);
     }
 
     private void RefreshGame()
@@ -169,7 +118,7 @@ public sealed class GamePage : ContentPage
             foreach (var item in _game.Teams) _totals.Children.Add(new Label { Text = $"{item.Name}: {_game.TeamTotal(item.Id)}" });
         else
             foreach (var player in _game.Players) _totals.Children.Add(new Label { Text = $"{player.Name}: {_game.PlayerTotal(player.Id)}" });
-        RefreshScore();
+        RefreshPendingTurn();
     }
 
     private async Task Save()
@@ -183,11 +132,152 @@ public sealed class GamePage : ContentPage
         if (_game.Mode == GameMode.Teams)
         {
             var ranked = _game.Teams.Select(t => (t.Name, Score: _game.TeamTotal(t.Id))).OrderByDescending(x => x.Score).ToArray();
-            var winners = ranked.Where(x => x.Score == ranked[0].Score).Select(x => x.Name);
-            return $"Winner: {string.Join(" and ", winners)} — {ranked[0].Score} points";
+            return $"Winner: {string.Join(" and ", ranked.Where(x => x.Score == ranked[0].Score).Select(x => x.Name))} — {ranked[0].Score} points";
         }
         var players = _game.Players.Select(p => (p.Name, Score: _game.PlayerTotal(p.Id))).OrderByDescending(x => x.Score).ToArray();
-        var playerWinners = players.Where(x => x.Score == players[0].Score).Select(x => x.Name);
-        return $"Winner: {string.Join(" and ", playerWinners)} — {players[0].Score} points";
+        return $"Winner: {string.Join(" and ", players.Where(x => x.Score == players[0].Score).Select(x => x.Name))} — {players[0].Score} points";
+    }
+}
+
+public sealed class WordEntryView : Border
+{
+    private readonly Label _heading = new() { FontSize = 18, FontAttributes = FontAttributes.Bold };
+    private readonly Entry _word = new() { Placeholder = "Enter complete word", CharacterSpacing = 2 };
+    private readonly HorizontalStackLayout _letterButtons = new() { Spacing = 6 };
+    private readonly Label _selected = new() { Text = "Select a letter above" };
+    private readonly Picker _letterMultiplier = new() { Title = "Selected letter multiplier", ItemsSource = new[] { "Normal letter", "Double letter", "Triple letter" }, SelectedIndex = 0 };
+    private readonly Picker _wordMultiplier = new() { Title = "Word multiplier", ItemsSource = new[] { "Normal word", "Double word", "Triple word" }, SelectedIndex = 0 };
+    private readonly Label _calculation = new() { FontSize = 17 };
+    private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = Colors.DarkOrange };
+    private int _selectedLetter = -1;
+    private bool _updating;
+    private string? _confirmedWord;
+    private int _number;
+
+    public WordScoreBuilder Score { get; } = new();
+    public bool IsConfirmedValid => string.Equals(_confirmedWord, Score.Word, StringComparison.Ordinal);
+    public event EventHandler? Changed;
+    public event EventHandler? RemoveRequested;
+
+    public int Number { get => _number; set { _number = value; _heading.Text = $"Word {_number}"; } }
+
+    public WordEntryView(int number)
+    {
+        Number = number;
+        Stroke = Colors.LightGray;
+        StrokeThickness = 1;
+        Padding = 12;
+        _word.TextChanged += WordChanged;
+        _letterMultiplier.SelectedIndexChanged += LetterMultiplierChanged;
+        _wordMultiplier.SelectedIndexChanged += (_, _) =>
+        {
+            if (_updating) return;
+            Score.SetWordMultiplier(_wordMultiplier.SelectedIndex + 1);
+            Invalidate(); RefreshCalculation();
+        };
+
+        var check = new Button { Text = "Check this word with Collins" };
+        check.Clicked += CheckWord;
+        var valid = new Button { Text = "Collins says VALID" };
+        valid.Clicked += (_, _) =>
+        {
+            if (Score.Letters.Count == 0) return;
+            _confirmedWord = Score.Word;
+            _validation.Text = $"Confirmed valid: {_confirmedWord}";
+            _validation.TextColor = Colors.Green;
+            Changed?.Invoke(this, EventArgs.Empty);
+        };
+        var invalid = new Button { Text = "NOT VALID" };
+        invalid.Clicked += (_, _) => { _word.Text = string.Empty; _word.Focus(); };
+        var remove = new Button { Text = "Remove this word" };
+        remove.Clicked += (_, _) => RemoveRequested?.Invoke(this, EventArgs.Empty);
+
+        Content = new VerticalStackLayout
+        {
+            Spacing = 8,
+            Children =
+            {
+                _heading, _word,
+                new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _letterButtons },
+                _selected, _letterMultiplier, _wordMultiplier, _calculation, _validation,
+                check, new HorizontalStackLayout { Spacing = 8, Children = { valid, invalid } }, remove
+            }
+        };
+        RefreshCalculation();
+    }
+
+    private void WordChanged(object? sender, TextChangedEventArgs e)
+    {
+        var normalized = new string((e.NewTextValue ?? string.Empty).Where(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z').ToArray()).ToUpperInvariant();
+        if (_word.Text != normalized) { _word.Text = normalized; return; }
+        _selectedLetter = -1;
+        _letterButtons.Children.Clear();
+        if (normalized.Length > 0)
+        {
+            Score.SetWord(normalized);
+            for (var i = 0; i < Score.Letters.Count; i++) AddLetterButton(i);
+        }
+        else while (Score.Letters.Count > 0) Score.RemoveLastLetter();
+        Invalidate(); RefreshCalculation();
+    }
+
+    private void AddLetterButton(int index)
+    {
+        var play = Score.Letters[index];
+        var button = new Button { Text = $"{play.Letter}\n{play.BaseValue}", WidthRequest = 54, CommandParameter = index };
+        button.Clicked += (_, _) => SelectLetter((int)button.CommandParameter);
+        _letterButtons.Children.Add(button);
+    }
+
+    private void SelectLetter(int index)
+    {
+        _selectedLetter = index;
+        var play = Score.Letters[index];
+        _selected.Text = $"Selected: {play.Letter} (value {play.BaseValue})";
+        _updating = true;
+        _letterMultiplier.SelectedIndex = play.LetterMultiplier - 1;
+        _updating = false;
+        RefreshLetterButtons();
+    }
+
+    private void LetterMultiplierChanged(object? sender, EventArgs e)
+    {
+        if (_updating || _selectedLetter < 0) return;
+        Score.SetLetterMultiplier(_selectedLetter, _letterMultiplier.SelectedIndex + 1);
+        Invalidate(); RefreshLetterButtons(); RefreshCalculation();
+    }
+
+    private void RefreshLetterButtons()
+    {
+        for (var i = 0; i < _letterButtons.Children.Count; i++)
+        {
+            var button = (Button)_letterButtons.Children[i];
+            var play = Score.Letters[i];
+            button.Text = play.LetterMultiplier == 1 ? $"{play.Letter}\n{play.BaseValue}" : $"{play.Letter}\n{play.BaseValue}×{play.LetterMultiplier}";
+            button.BackgroundColor = i == _selectedLetter ? Color.FromArgb("#F4E3B2") : Colors.Transparent;
+        }
+    }
+
+    private void RefreshCalculation()
+    {
+        _calculation.Text = $"Letters: {Score.Subtotal} × Word: {Score.WordMultiplier} = {Score.Total}";
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Invalidate()
+    {
+        _confirmedWord = null;
+        _validation.Text = "Word not yet checked";
+        _validation.TextColor = Colors.DarkOrange;
+    }
+
+    private async void CheckWord(object? sender, EventArgs e)
+    {
+        if (Score.Letters.Count == 0) return;
+        Invalidate();
+        await Clipboard.Default.SetTextAsync(Score.Word);
+        _validation.Text = $"{Score.Word} copied. Paste it into Collins, then return and select the result.";
+        Changed?.Invoke(this, EventArgs.Empty);
+        await Launcher.Default.OpenAsync(new Uri("https://scrabble.collinsdictionary.com/check/"));
     }
 }
