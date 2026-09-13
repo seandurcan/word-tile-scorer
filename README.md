@@ -8,7 +8,10 @@ Android-first scorekeeper for word-tile games, implemented with a shared C# core
 - Player order can be moved up or down before a game.
 - Individual play or teams.
 - Four teams of two are supported; the turn order remains the arranged player order, allowing `A1, B1, C1, D1, A2, B2, C2, D2`.
-- Score a word letter-by-letter.
+- Enter a complete word; standard English tile values are supplied automatically.
+- Select individual letters within the word and apply double/triple-letter multipliers.
+- Apply the word multiplier only after all letter multipliers have been included.
+- Add and score further words created by the same play; the turn total is the sum of all words.
 - Normal, double and triple letter multipliers.
 - Normal, double and triple word multipliers.
 - Pass for zero points.
@@ -42,4 +45,4 @@ dotnet run --project .\WordTileScorer.Core.SelfTest
 
 ## Scoring boundary
 
-The intended dictionary is Collins Scrabble Words (CSW24). Until licensed programmatic access is available, the application opens the official Collins checker and requires the players to confirm its result. A changed word must be checked again; an unconfirmed word cannot be scored.
+The intended dictionary is Collins Scrabble Words (CSW24). Until licensed programmatic access is available, the application copies each entered word, opens the official Collins checker and requires the players to confirm its result. Every word created by a play must be confirmed. A changed word must be checked again; an unconfirmed word cannot be scored.
