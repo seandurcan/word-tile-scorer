@@ -85,11 +85,15 @@ public sealed record Turn(
     Guid PlayerId,
     Guid? TeamId,
     DateTimeOffset PlayedAt,
+    IReadOnlyList<PlayedWord> Words,
+    int Score,
+    bool IsPass);
+
+public sealed record PlayedWord(
     string Word,
     IReadOnlyList<LetterPlay> Letters,
     int WordMultiplier,
-    int Score,
-    bool IsPass);
+    int Score);
 
 public sealed record LetterPlay(char Letter, int BaseValue, int LetterMultiplier)
 {
