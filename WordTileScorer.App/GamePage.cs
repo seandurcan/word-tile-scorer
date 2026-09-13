@@ -50,7 +50,7 @@ public sealed class GamePage : ContentPage
                     _turn, _totals,
                     new BoxView { HeightRequest = 1, Color = Colors.Gray },
                     new Label { Text = "Words made by this play", FontSize = 20, FontAttributes = FontAttributes.Bold },
-                    new Label { Text = "Enter a complete word. Select a letter to apply its letter multiplier, then select the word multiplier." },
+                    new Label { Text = "Enter a complete word. Select one or more letters, apply one letter premium to them, then choose any word premiums covered." },
                     _words, addWord, _turnTotal, _record, pass, undo, finish
                 }
             }
@@ -144,12 +144,16 @@ public sealed class WordEntryView : Border
     private readonly Label _heading = new() { FontSize = 18, FontAttributes = FontAttributes.Bold };
     private readonly Entry _word = new() { Placeholder = "Enter complete word", CharacterSpacing = 2 };
     private readonly HorizontalStackLayout _letterButtons = new() { Spacing = 6 };
-    private readonly Label _selected = new() { Text = "Select a letter above" };
-    private readonly Picker _letterMultiplier = new() { Title = "Selected letter multiplier", ItemsSource = new[] { "Normal letter", "Double letter", "Triple letter" }, SelectedIndex = 0 };
-    private readonly Picker _wordMultiplier = new() { Title = "Word multiplier", ItemsSource = new[] { "Normal word", "Double word", "Triple word" }, SelectedIndex = 0 };
+    private readonly Label _selected = new() { Text = "Select one or more letters above" };
+    private readonly Picker[] _wordPremiums = Enumerable.Range(1, 3).Select(number => new Picker
+    {
+        Title = $"Word premium {number}",
+        ItemsSource = new[] { "No word premium", "Double word", "Triple word" },
+        SelectedIndex = 0
+    }).ToArray();
     private readonly Label _calculation = new() { FontSize = 17 };
     private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = Colors.DarkOrange };
-    private int _selectedLetter = -1;
+    private readonly HashSet<int> _selectedLetters = [];
     private bool _updating;
     private string? _confirmedWord;
     private int _number;
@@ -168,13 +172,20 @@ public sealed class WordEntryView : Border
         StrokeThickness = 1;
         Padding = 12;
         _word.TextChanged += WordChanged;
-        _letterMultiplier.SelectedIndexChanged += LetterMultiplierChanged;
-        _wordMultiplier.SelectedIndexChanged += (_, _) =>
+        for (var slot = 0; slot < _wordPremiums.Length; slot++)
         {
-            if (_updating) return;
-            Score.SetWordMultiplier(_wordMultiplier.SelectedIndex + 1);
-            Invalidate(); RefreshCalculation();
-        };
+            var premiumSlot = slot;
+            _wordPremiums[slot].SelectedIndexChanged += (_, _) =>
+            {
+                if (_updating) return;
+                Score.SetWordPremium(premiumSlot, _wordPremiums[premiumSlot].SelectedIndex + 1);
+                Invalidate(); RefreshCalculation();
+            };
+        }
+
+        var normalLetter = PremiumButton("Normal letter", 1);
+        var doubleLetter = PremiumButton("Double letter", 2);
+        var tripleLetter = PremiumButton("Triple letter", 3);
 
         var check = new Button { Text = "Check this word with Collins" };
         check.Clicked += CheckWord;
@@ -199,18 +210,28 @@ public sealed class WordEntryView : Border
             {
                 _heading, _word,
                 new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = _letterButtons },
-                _selected, _letterMultiplier, _wordMultiplier, _calculation, _validation,
+                _selected,
+                new HorizontalStackLayout { Spacing = 6, Children = { normalLetter, doubleLetter, tripleLetter } },
+                new Label { Text = "Word premiums (use another row only when the word covers another premium square)" },
+                _wordPremiums[0], _wordPremiums[1], _wordPremiums[2], _calculation, _validation,
                 check, new HorizontalStackLayout { Spacing = 8, Children = { valid, invalid } }, remove
             }
         };
         RefreshCalculation();
     }
 
+    private Button PremiumButton(string text, int multiplier)
+    {
+        var button = new Button { Text = text, FontSize = 13 };
+        button.Clicked += (_, _) => ApplyLetterMultiplier(multiplier);
+        return button;
+    }
+
     private void WordChanged(object? sender, TextChangedEventArgs e)
     {
         var normalized = new string((e.NewTextValue ?? string.Empty).Where(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z').ToArray()).ToUpperInvariant();
         if (_word.Text != normalized) { _word.Text = normalized; return; }
-        _selectedLetter = -1;
+        _selectedLetters.Clear();
         _letterButtons.Children.Clear();
         if (normalized.Length > 0)
         {
@@ -225,25 +246,23 @@ public sealed class WordEntryView : Border
     {
         var play = Score.Letters[index];
         var button = new Button { Text = $"{play.Letter}\n{play.BaseValue}", WidthRequest = 54, CommandParameter = index };
-        button.Clicked += (_, _) => SelectLetter((int)button.CommandParameter);
+        button.Clicked += (_, _) => ToggleLetter((int)button.CommandParameter);
         _letterButtons.Children.Add(button);
     }
 
-    private void SelectLetter(int index)
+    private void ToggleLetter(int index)
     {
-        _selectedLetter = index;
-        var play = Score.Letters[index];
-        _selected.Text = $"Selected: {play.Letter} (value {play.BaseValue})";
-        _updating = true;
-        _letterMultiplier.SelectedIndex = play.LetterMultiplier - 1;
-        _updating = false;
+        if (!_selectedLetters.Add(index)) _selectedLetters.Remove(index);
+        _selected.Text = _selectedLetters.Count == 0
+            ? "Select one or more letters above"
+            : $"Selected: {string.Join(", ", _selectedLetters.Order().Select(i => $"{Score.Letters[i].Letter}{i + 1}"))}";
         RefreshLetterButtons();
     }
 
-    private void LetterMultiplierChanged(object? sender, EventArgs e)
+    private void ApplyLetterMultiplier(int multiplier)
     {
-        if (_updating || _selectedLetter < 0) return;
-        Score.SetLetterMultiplier(_selectedLetter, _letterMultiplier.SelectedIndex + 1);
+        if (_selectedLetters.Count == 0) return;
+        foreach (var index in _selectedLetters) Score.SetLetterMultiplier(index, multiplier);
         Invalidate(); RefreshLetterButtons(); RefreshCalculation();
     }
 
@@ -253,14 +272,17 @@ public sealed class WordEntryView : Border
         {
             var button = (Button)_letterButtons.Children[i];
             var play = Score.Letters[i];
-            button.Text = play.LetterMultiplier == 1 ? $"{play.Letter}\n{play.BaseValue}" : $"{play.Letter}\n{play.BaseValue}×{play.LetterMultiplier}";
-            button.BackgroundColor = i == _selectedLetter ? Color.FromArgb("#F4E3B2") : Colors.Transparent;
+            var premium = play.LetterMultiplier switch { 2 => " DL", 3 => " TL", _ => string.Empty };
+            button.Text = $"{play.Letter}\n{play.BaseValue}{premium}";
+            button.BackgroundColor = _selectedLetters.Contains(i) ? Color.FromArgb("#F4E3B2") : Colors.Transparent;
         }
     }
 
     private void RefreshCalculation()
     {
-        _calculation.Text = $"Letters: {Score.Subtotal} × Word: {Score.WordMultiplier} = {Score.Total}";
+        var premiums = Score.WordPremiums.Where(x => x > 1).Select(x => $"×{x}").ToArray();
+        var wordPart = premiums.Length == 0 ? "no word premium" : string.Join(" ", premiums);
+        _calculation.Text = $"Letter total: {Score.Subtotal}; word: {wordPart}; total = {Score.Total}";
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

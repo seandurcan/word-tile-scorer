@@ -9,11 +9,11 @@ Android-first scorekeeper for word-tile games, implemented with a shared C# core
 - Individual play or teams.
 - Four teams of two are supported; the turn order remains the arranged player order, allowing `A1, B1, C1, D1, A2, B2, C2, D2`.
 - Enter a complete word; standard English tile values are supplied automatically.
-- Select individual letters within the word and apply double/triple-letter multipliers.
+- Select one or several letters within the word and apply one exclusive normal/double/triple-letter setting to all selected letters.
 - Apply the word multiplier only after all letter multipliers have been included.
 - Add and score further words created by the same play; the turn total is the sum of all words.
 - Normal, double and triple letter multipliers.
-- Normal, double and triple word multipliers.
+- Up to three normal, double or triple word-premium squares can be recorded; they compound after all letter premiums.
 - Pass for zero points.
 - Undo the most recent turn.
 - Running player contributions and team totals.

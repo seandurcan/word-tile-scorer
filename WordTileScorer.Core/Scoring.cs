@@ -3,9 +3,11 @@ namespace WordTileScorer.Core;
 public sealed class WordScoreBuilder
 {
     private readonly List<LetterPlay> _letters = [];
+    private readonly int[] _wordPremiums = [1, 1, 1];
 
     public IReadOnlyList<LetterPlay> Letters => _letters;
-    public int WordMultiplier { get; private set; } = 1;
+    public IReadOnlyList<int> WordPremiums => _wordPremiums;
+    public int WordMultiplier => _wordPremiums.Aggregate(1, checked((total, premium) => total * premium));
     public int Subtotal => _letters.Sum(x => x.Score);
     public int Total => checked(Subtotal * WordMultiplier);
     public string Word => new(_letters.Select(x => x.Letter).ToArray());
@@ -43,7 +45,16 @@ public sealed class WordScoreBuilder
     public void SetWordMultiplier(int multiplier)
     {
         if (multiplier is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(multiplier));
-        WordMultiplier = multiplier;
+        _wordPremiums[0] = multiplier;
+        _wordPremiums[1] = 1;
+        _wordPremiums[2] = 1;
+    }
+
+    public void SetWordPremium(int slot, int multiplier)
+    {
+        if (slot is < 0 or >= 3) throw new ArgumentOutOfRangeException(nameof(slot));
+        if (multiplier is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(multiplier));
+        _wordPremiums[slot] = multiplier;
     }
 }
 

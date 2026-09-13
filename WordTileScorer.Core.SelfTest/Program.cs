@@ -7,7 +7,9 @@ var tests = new (string Name, Action Run)[]
     ("undo restores current player", UndoRestoresPlayer),
     ("team totals include both partners", TeamTotals),
     ("built-in English tile values", BuiltInTileValues),
-    ("multiple words form one turn total", MultipleWordTotal)
+    ("multiple words form one turn total", MultipleWordTotal),
+    ("letter premium is replaced, not stacked", LetterPremiumIsExclusive),
+    ("multiple word premiums compound", MultipleWordPremiums)
 };
 
 var failed = 0;
@@ -87,6 +89,23 @@ static void MultipleWordTotal()
     var second = new WordScoreBuilder(); second.SetWord("AT"); second.SetLetterMultiplier(0, 2);
     var turn = new GameEngine().RecordWords(game, [first, second]);
     Equal(19, turn.Score); // CAT: ((3×2)+1+1)×2=16; AT: (1×2)+1=3
+}
+
+static void LetterPremiumIsExclusive()
+{
+    var score = new WordScoreBuilder(); score.SetWord("BOX");
+    score.SetLetterMultiplier(0, 2);
+    score.SetLetterMultiplier(0, 3);
+    Equal(13, score.Total); // B is triple, not double then triple.
+}
+
+static void MultipleWordPremiums()
+{
+    var score = new WordScoreBuilder(); score.SetWord("CAT");
+    score.SetLetterMultiplier(0, 2);
+    score.SetWordPremium(0, 2);
+    score.SetWordPremium(1, 3);
+    Equal(48, score.Total); // ((3×2)+1+1)×2×3
 }
 
 static void Equal<T>(T expected, T actual)
