@@ -68,9 +68,11 @@ static void TeamTotals()
     var teamB = Team.Create("B", [players[1].Id, players[3].Id]);
     var engine = new GameEngine();
     var game = engine.CreateGame(players, GameMode.Teams, [teamA, teamB]);
-    foreach (var value in new[] { 3, 5, 7, 11 })
+    foreach (var (letter, value) in new[] { ('A', 3), ('B', 5), ('C', 7), ('D', 11) })
     {
-        var score = new WordScoreBuilder(); score.AddLetter('X', value); engine.RecordWords(game, [score]);
+        var score = new WordScoreBuilder();
+        score.AddLetter(letter, value);
+        engine.RecordWords(game, [score], [letter]);
     }
     Equal(10, game.TeamTotal(teamA.Id));
     Equal(16, game.TeamTotal(teamB.Id));
@@ -93,7 +95,7 @@ static void MultipleWordTotal()
     var game = new GameEngine().CreateGame(players, GameMode.Individual);
     var first = new WordScoreBuilder(); first.SetWord("CAT"); first.SetLetterMultiplier(0, 2); first.SetWordMultiplier(2);
     var second = new WordScoreBuilder(); second.SetWord("AT"); second.SetLetterMultiplier(0, 2);
-    var turn = new GameEngine().RecordWords(game, [first, second]);
+    var turn = new GameEngine().RecordWords(game, [first, second], "CAT".ToCharArray());
     Equal(19, turn.Score); // CAT: ((3×2)+1+1)×2=16; AT: (1×2)+1=3
 }
 
