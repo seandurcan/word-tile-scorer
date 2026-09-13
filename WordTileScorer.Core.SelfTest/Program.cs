@@ -1,0 +1,73 @@
+using WordTileScorer.Core;
+
+var tests = new (string Name, Action Run)[]
+{
+    ("letter and word multipliers", ScoreMultipliers),
+    ("eight-player alternating order", EightPlayerOrder),
+    ("undo restores current player", UndoRestoresPlayer),
+    ("team totals include both partners", TeamTotals)
+};
+
+var failed = 0;
+foreach (var test in tests)
+{
+    try { test.Run(); Console.WriteLine($"PASS {test.Name}"); }
+    catch (Exception ex) { failed++; Console.Error.WriteLine($"FAIL {test.Name}: {ex.Message}"); }
+}
+Environment.ExitCode = failed == 0 ? 0 : 1;
+
+static void ScoreMultipliers()
+{
+    var score = new WordScoreBuilder();
+    score.AddLetter('C', 3, 2);
+    score.AddLetter('A', 1);
+    score.AddLetter('T', 1);
+    score.SetWordMultiplier(2);
+    Equal(16, score.Total);
+}
+
+static void EightPlayerOrder()
+{
+    var players = Enumerable.Range(1, 8).Select(i => Player.Create($"P{i}")).ToArray();
+    var teams = Enumerable.Range(0, 4)
+        .Select(i => Team.Create($"Team {i + 1}", [players[i].Id, players[i + 4].Id]))
+        .ToArray();
+    var game = new GameEngine().CreateGame(players, GameMode.Teams, teams);
+    var seen = new List<string>();
+    var engine = new GameEngine();
+    for (var i = 0; i < 8; i++) { seen.Add(game.CurrentPlayer.Name); engine.Pass(game); }
+    Equal("P1,P2,P3,P4,P5,P6,P7,P8", string.Join(',', seen));
+    Equal("P1", game.CurrentPlayer.Name);
+}
+
+static void UndoRestoresPlayer()
+{
+    var players = new[] { Player.Create("A"), Player.Create("B") };
+    var engine = new GameEngine();
+    var game = engine.CreateGame(players, GameMode.Individual);
+    engine.Pass(game);
+    Equal("B", game.CurrentPlayer.Name);
+    engine.UndoLastTurn(game);
+    Equal("A", game.CurrentPlayer.Name);
+}
+
+static void TeamTotals()
+{
+    var players = new[] { Player.Create("A1"), Player.Create("B1"), Player.Create("A2"), Player.Create("B2") };
+    var teamA = Team.Create("A", [players[0].Id, players[2].Id]);
+    var teamB = Team.Create("B", [players[1].Id, players[3].Id]);
+    var engine = new GameEngine();
+    var game = engine.CreateGame(players, GameMode.Teams, [teamA, teamB]);
+    foreach (var value in new[] { 3, 5, 7, 11 })
+    {
+        var score = new WordScoreBuilder(); score.AddLetter('X', value); engine.RecordWord(game, score);
+    }
+    Equal(10, game.TeamTotal(teamA.Id));
+    Equal(16, game.TeamTotal(teamB.Id));
+}
+
+static void Equal<T>(T expected, T actual)
+{
+    if (!EqualityComparer<T>.Default.Equals(expected, actual))
+        throw new Exception($"Expected {expected}; received {actual}.");
+}
