@@ -11,7 +11,7 @@ public sealed class GamePage : ContentPage
     private readonly VerticalStackLayout _totals = new() { Spacing = 4 };
     private readonly VerticalStackLayout _words = new() { Spacing = 14 };
     private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
-    private readonly Button _record = new() { Text = "Record turn", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White, IsEnabled = false };
+    private readonly Button _record = new() { Text = "Record turn", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White };
 
     public GamePage(GameState game)
     {
@@ -64,8 +64,8 @@ public sealed class GamePage : ContentPage
         editor.Changed += (_, _) => RefreshPendingTurn();
         editor.RemoveRequested += (_, _) =>
         {
-            if (_words.Children.Count <= 1) return;
             _words.Children.Remove(editor);
+            if (_words.Children.Count == 0) AddWord();
             RenumberWords();
             RefreshPendingTurn();
         };
@@ -85,11 +85,15 @@ public sealed class GamePage : ContentPage
     {
         try
         {
-            var editors = Editors().ToArray();
+            var editors = Editors().Where(x => x.HasWord).ToArray();
+            if (editors.Length == 0)
+                throw new InvalidOperationException("Enter at least one word, or use Pass (0).");
             if (editors.Any(x => !x.IsConfirmedValid))
-                throw new InvalidOperationException("Every word must be checked and confirmed valid before recording the turn.");
-            _engine.RecordWords(_game, editors.Select(x => x.Score).ToArray());
+                throw new InvalidOperationException("Check every entered word with Collins and select Accept word before recording the turn.");
+            var playerName = _game.CurrentPlayer.Name;
+            var turn = _engine.RecordWords(_game, editors.Select(x => x.Score).ToArray());
             await AfterTurn();
+            await DisplayAlert("Turn recorded", $"{playerName}: {turn.Score} points.\nNext turn: {_game.CurrentPlayer.Name}.", "OK");
         }
         catch (Exception ex) { await DisplayAlert("Cannot record turn", ex.Message, "OK"); }
     }
@@ -104,9 +108,8 @@ public sealed class GamePage : ContentPage
 
     private void RefreshPendingTurn()
     {
-        var editors = Editors().ToArray();
+        var editors = Editors().Where(x => x.HasWord).ToArray();
         _turnTotal.Text = $"Turn total: {editors.Sum(x => x.Score.Total)}";
-        _record.IsEnabled = editors.Length > 0 && editors.All(x => x.IsConfirmedValid);
     }
 
     private void RefreshGame()
@@ -160,6 +163,7 @@ public sealed class WordEntryView : Border
     private int _number;
 
     public WordScoreBuilder Score { get; } = new();
+    public bool HasWord => Score.Letters.Count > 0;
     public bool IsConfirmedValid => string.Equals(_confirmedWord, Score.Word, StringComparison.Ordinal);
     public event EventHandler? Changed;
     public event EventHandler? RemoveRequested;
@@ -180,7 +184,7 @@ public sealed class WordEntryView : Border
             {
                 if (_updating) return;
                 Score.SetWordPremium(premiumSlot, _wordPremiums[premiumSlot].SelectedIndex + 1);
-                Invalidate(); RefreshCalculation();
+                RefreshCalculation();
             };
         }
 
@@ -251,11 +255,17 @@ public sealed class WordEntryView : Border
 
     private void ApplyLetterMultiplier(int multiplier)
     {
-        if (_selectedLetters.Count == 0) return;
+        if (_selectedLetters.Count == 0)
+        {
+            _selected.Text = "Select at least one tile before applying a letter premium.";
+            _selected.TextColor = Colors.Red;
+            return;
+        }
         foreach (var index in _selectedLetters) Score.SetLetterMultiplier(index, multiplier);
         _selectedLetters.Clear();
         _selected.Text = "Select one or more letters above";
-        Invalidate(); RefreshLetterButtons(); RefreshLetterSelectionList(); RefreshCalculation();
+        _selected.TextColor = Colors.Black;
+        RefreshLetterButtons(); RefreshLetterSelectionList(); RefreshCalculation();
     }
 
     private void RefreshLetterSelectionList()
@@ -305,7 +315,12 @@ public sealed class WordEntryView : Border
 
     private async void CheckWord(object? sender, EventArgs e)
     {
-        if (Score.Letters.Count == 0) return;
+        if (Score.Letters.Count == 0)
+        {
+            _validation.Text = "Enter a word before checking Collins.";
+            _validation.TextColor = Colors.Red;
+            return;
+        }
         Invalidate();
         await Clipboard.Default.SetTextAsync(Score.Word);
         _validation.Text = $"Checking {Score.Word} with Collins…";

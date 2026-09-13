@@ -20,6 +20,8 @@ Android-first scorekeeper for word-tile games, implemented with a shared C# core
 - Running player contributions and team totals.
 - Offline game-state persistence on the device.
 - Mandatory temporary word-validation gate: Collins opens inside the app with explicit Accept word and Reject word controls before the score can be recorded.
+- Changing scoring premiums does not cancel an accepted dictionary result; only changing the spelling requires another check.
+- Record turn always responds: it either explains missing input or confirms the player, recorded score and next player.
 
 League and knockout entities are included in the shared model, but their user interfaces are deliberately not part of this first slice.
 

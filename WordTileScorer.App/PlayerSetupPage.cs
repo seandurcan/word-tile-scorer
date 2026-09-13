@@ -13,7 +13,11 @@ public sealed class PlayerSetupPage : ContentPage
         for (var i = 1; i <= 4; i++) AddPlayerRow($"Player {i}");
 
         var add = new Button { Text = "Add player (maximum 8)" };
-        add.Clicked += (_, _) => { if (_players.Children.Count < 8) AddPlayerRow(string.Empty); };
+        add.Clicked += async (_, _) =>
+        {
+            if (_players.Children.Count < 8) AddPlayerRow(string.Empty);
+            else await DisplayAlert("Maximum players", "A game can contain no more than eight players.", "OK");
+        };
         var start = new Button { Text = "Start game", BackgroundColor = Color.FromArgb("#0B6E4F"), TextColor = Colors.White };
         start.Clicked += StartClicked;
 
