@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Restore
+        run: dotnet restore WordTileScorer.App/WordTileScorer.App.csproj
+
+      - name: Run core checks
+        run: dotnet run --project WordTileScorer.Core.SelfTest/WordTileScorer.Core.SelfTest.csproj --configuration Release
+
+      - name: Build APK
+        run: >-
+          dotnet publish WordTileScorer.App/WordTileScorer.App.csproj
+          --framework net10.0-android
+          --configuration Release
+          -p:AndroidPackageFormat=apk
+          -p:AndroidKeyStore=false
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WordTileScorer-Android-v0.1.1
+          path: WordTileScorer.App/bin/Release/net10.0-android/publish/*.apk
+          if-no-files-found: error
+          retention-days: 30
