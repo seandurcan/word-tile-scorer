@@ -34,14 +34,14 @@ jobs:
       - name: Build APK
         run: |
           base64 --decode .github/dev-signing.keystore.b64 > "$RUNNER_TEMP/wordtiles-dev.keystore"
-          dotnet publish WordTileScorer.App/WordTileScorer.App.csproj
-            --framework net10.0-android
-            --configuration Release
-            -p:AndroidPackageFormat=apk
-            -p:AndroidKeyStore=true
-            -p:AndroidSigningKeyStore="$RUNNER_TEMP/wordtiles-dev.keystore"
-            -p:AndroidSigningStorePass=WordTilesDev2026
-            -p:AndroidSigningKeyAlias=wordtilesdev
+          dotnet publish WordTileScorer.App/WordTileScorer.App.csproj \
+            --framework net10.0-android \
+            --configuration Release \
+            -p:AndroidPackageFormat=apk \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="$RUNNER_TEMP/wordtiles-dev.keystore" \
+            -p:AndroidSigningStorePass=WordTilesDev2026 \
+            -p:AndroidSigningKeyAlias=wordtilesdev \
             -p:AndroidSigningKeyPass=WordTilesDev2026
           cp WordTileScorer.App/bin/Release/net10.0-android/publish/*-Signed.apk WordTileScorer-Android-v0.3.1.apk
 
