@@ -13,7 +13,9 @@ var tests = new (string Name, Action Run)[]
     ("English set contains 100 tiles", EnglishSetContains100Tiles),
     ("crossing tile is consumed once", CrossingTileConsumedOnce),
     ("tile shortages are detected", TileShortagesDetected),
-    ("seven placed tiles earn bingo bonus", SevenTileBonus)
+    ("seven placed tiles earn bingo bonus", SevenTileBonus),
+    ("opening word cannot exceed placed tiles", OpeningWordCannotExceedPlacedTiles),
+    ("existing board tiles can extend a word", ExistingBoardTilesCanExtendWord)
 };
 
 var failed = 0;
@@ -146,6 +148,31 @@ static void SevenTileBonus()
     var turn = new GameEngine().RecordWords(game, [word], "READING".ToCharArray());
     Equal(word.Total + 50, turn.Score);
     Equal(50, turn.BingoBonus);
+}
+
+static void OpeningWordCannotExceedPlacedTiles()
+{
+    var game = CreateGameForTileLimit();
+    var word = new WordScoreBuilder(); word.SetWord("REACTION");
+    Throws<InvalidOperationException>(() =>
+        new GameEngine().RecordWords(game, [word], "REACTION"[..7].ToCharArray()));
+}
+
+static void ExistingBoardTilesCanExtendWord()
+{
+    var game = CreateGameForTileLimit();
+    var first = new WordScoreBuilder(); first.SetWord("CAT");
+    new GameEngine().RecordWords(game, [first], "CAT".ToCharArray());
+    var extension = new WordScoreBuilder(); extension.SetWord("CATER");
+    new GameEngine().RecordWords(game, [extension], "ER".ToCharArray());
+    Equal(5, GameEngine.UsedTiles(game).Values.Sum());
+}
+
+static void Throws<TException>(Action action) where TException : Exception
+{
+    try { action(); }
+    catch (TException) { return; }
+    throw new Exception($"Expected {typeof(TException).Name}.");
 }
 
 static void Equal<T>(T expected, T actual)

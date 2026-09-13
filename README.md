@@ -28,6 +28,7 @@ Development APKs use a stable development application ID and signing key, allowi
 - The interface uses a high-contrast colour-blind-safe navy, blue, amber and neutral palette; status is never communicated by colour alone.
 - Standard 100-tile English distribution and per-letter usage are tracked from the rack tiles physically placed each turn. A crossing tile shared by several new words is counted once.
 - Attempts to exceed the rack or set inventory show the exact problem and require an explicit Allow or Cancel decision.
+- A word is blocked if it cannot be formed from the rack tiles entered for that turn plus tiles recorded on the board. The opening word therefore cannot be longer than the opening rack play; crossing words may reuse shared new tiles without consuming them twice.
 - Playing all seven rack tiles adds the official 50-point bonus.
 - Word premiums use bottom-aligned Double Word and Treble Word buttons with visible counts and a checked three-square board maximum.
 - Team members are chosen from dropdown lists; assigned players disappear from every other dropdown.

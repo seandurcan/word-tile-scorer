@@ -130,6 +130,7 @@ public sealed class GameEngine
         var tiles = (placedTiles ?? []).Select(NormalizeTile).ToArray();
         if (tiles.Length > 7 && !allowExcessTiles)
             throw new InvalidOperationException("A player can place no more than seven rack tiles in one turn.");
+        ValidateWordsCanBeFormed(game, scores, tiles);
         var shortages = TileShortages(game, tiles);
         if (shortages.Count > 0 && !allowExcessTiles)
             throw new TileLimitException(shortages);
@@ -155,6 +156,70 @@ public sealed class GameEngine
             })
             .Where(item => item.Excess > 0)
             .ToDictionary(item => item.Tile, item => item.Excess);
+    }
+
+    public static void ValidateWordsCanBeFormed(
+        GameState game,
+        IReadOnlyList<WordScoreBuilder> words,
+        IReadOnlyList<char> placedTiles)
+    {
+        if (words.Count == 0) return;
+        var normalizedPlaced = placedTiles.Select(NormalizeTile).ToArray();
+        var boardTiles = game.Turns.SelectMany(turn => turn.PlacedTiles ?? []).Select(NormalizeTile).ToArray();
+
+        var mainRemainder = LetterCounts(words[0].Word);
+        var placedBlanks = normalizedPlaced.Count(tile => tile == '?');
+        foreach (var tile in normalizedPlaced.Where(tile => tile != '?'))
+        {
+            if (!Take(mainRemainder, tile))
+                throw new InvalidOperationException($"The main word {words[0].Word} does not contain every tile entered as placed from the rack.");
+        }
+        while (placedBlanks-- > 0)
+        {
+            if (!TakeAny(mainRemainder))
+                throw new InvalidOperationException($"The main word {words[0].Word} is shorter than the number of tiles entered as placed.");
+        }
+        EnsureRemainderExistsOnBoard(words[0].Word, mainRemainder, boardTiles);
+
+        var availableForCrossings = boardTiles.Concat(normalizedPlaced).ToArray();
+        foreach (var word in words.Skip(1))
+            EnsureWordUsesAvailableTiles(word.Word, availableForCrossings);
+    }
+
+    private static void EnsureWordUsesAvailableTiles(string word, IReadOnlyList<char> availableTiles)
+    {
+        var needed = LetterCounts(word);
+        var blanks = availableTiles.Count(tile => tile == '?');
+        foreach (var tile in availableTiles.Where(tile => tile != '?')) Take(needed, tile);
+        while (blanks-- > 0) TakeAny(needed);
+        if (needed.Values.Sum() > 0)
+            throw new InvalidOperationException($"The word {word} uses letters that are not among the current rack tiles or tiles already recorded on the board.");
+    }
+
+    private static void EnsureRemainderExistsOnBoard(string word, Dictionary<char, int> remainder, IReadOnlyList<char> boardTiles)
+    {
+        var blanks = boardTiles.Count(tile => tile == '?');
+        foreach (var tile in boardTiles.Where(tile => tile != '?')) Take(remainder, tile);
+        while (blanks-- > 0) TakeAny(remainder);
+        if (remainder.Values.Sum() > 0)
+            throw new InvalidOperationException($"The word {word} requires more letters than the placed rack tiles and previously recorded board tiles provide.");
+    }
+
+    private static Dictionary<char, int> LetterCounts(string word) => word
+        .GroupBy(char.ToUpperInvariant)
+        .ToDictionary(group => group.Key, group => group.Count());
+
+    private static bool Take(Dictionary<char, int> counts, char tile)
+    {
+        if (!counts.TryGetValue(tile, out var count) || count == 0) return false;
+        counts[tile] = count - 1;
+        return true;
+    }
+
+    private static bool TakeAny(Dictionary<char, int> counts)
+    {
+        var entry = counts.FirstOrDefault(item => item.Value > 0);
+        return entry.Value > 0 && Take(counts, entry.Key);
     }
 
     private static char NormalizeTile(char tile)
