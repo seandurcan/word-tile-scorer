@@ -156,6 +156,27 @@ public sealed class GameEngine
 
     public static IReadOnlyList<char> CurrentRack(GameState game) => RackFor(game, game.CurrentPlayer.Id).ToArray();
 
+    public static bool CanAddToCurrentRack(
+        GameState game,
+        IReadOnlyList<char> pendingAddedTiles,
+        char proposedTile,
+        out string reason)
+    {
+        var tile = NormalizeTile(proposedTile);
+        if (RackFor(game, game.CurrentPlayer.Id).Count + pendingAddedTiles.Count >= 7)
+        {
+            reason = "The rack already contains the maximum of seven tiles.";
+            return false;
+        }
+        if (TileShortages(game, pendingAddedTiles.Append(tile)).ContainsKey(tile))
+        {
+            reason = tile == '?' ? "No blank tiles remain available." : $"No {tile} tiles remain available.";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
+    }
+
     public static IReadOnlyDictionary<char, int> UsedTiles(GameState game) => game.Turns
         .SelectMany(t => t.PlacedTiles ?? [])
         .GroupBy(NormalizeTile)

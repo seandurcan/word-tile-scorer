@@ -44,20 +44,20 @@ jobs:
             -p:AndroidSigningStorePass=WordTilesDev2026 \
             -p:AndroidSigningKeyAlias=wordtilesdev \
             -p:AndroidSigningKeyPass=WordTilesDev2026
-          cp WordTileScorer.App/bin/Release/net10.0-android/android-arm64/publish/*-Signed.apk WordTileScorer-Android-v0.3.8-REJECTED-TURN-ZERO.apk
+          cp WordTileScorer.App/bin/Release/net10.0-android/android-arm64/publish/*-Signed.apk WordTileScorer-Android-v0.3.9-TILE-AVAILABILITY.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WordTileScorer-Android-v0.3.8-REJECTED-TURN-ZERO
-          path: WordTileScorer-Android-v0.3.8-REJECTED-TURN-ZERO.apk
+          name: WordTileScorer-Android-v0.3.9-TILE-AVAILABILITY
+          path: WordTileScorer-Android-v0.3.9-TILE-AVAILABILITY.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish direct GitHub download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.8
-          name: Word Tile Scorer v0.3.8 — Rejected Turn Scores Zero
-          files: WordTileScorer-Android-v0.3.8-REJECTED-TURN-ZERO.apk
+          tag_name: v0.3.9
+          name: Word Tile Scorer v0.3.9 — Tile Availability
+          files: WordTileScorer-Android-v0.3.9-TILE-AVAILABILITY.apk
           fail_on_unmatched_files: true

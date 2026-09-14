@@ -29,7 +29,7 @@ public sealed class PlayerSetupPage : ContentPage
                 Children =
                 {
                     new Label { Text = "Players and playing order", FontSize = 24, FontAttributes = FontAttributes.Bold },
-                    new Label { Text = "Word Tile Scorer — version 0.3.8", FontAttributes = FontAttributes.Bold, TextColor = AppPalette.Blue },
+                    new Label { Text = "Word Tile Scorer — version 0.3.9", FontAttributes = FontAttributes.Bold, TextColor = AppPalette.Blue },
                     new Label { Text = "Enter 2–8 names. Use the arrows to set the exact turn order." },
                     _players,
                     add,

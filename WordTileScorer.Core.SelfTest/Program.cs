@@ -19,7 +19,8 @@ var tests = new (string Name, Action Run)[]
     ("rack order does not matter and unused tiles remain unused", RackOrderAndUnusedTiles),
     ("unused rack tiles remain for the player's next turn", UnusedRackTilesRemain),
     ("seven tiles on rack do not earn a bingo", FullRackIsNotBingo),
-    ("rejected word scores zero and advances turn", RejectedWordScoresZero)
+    ("rejected word scores zero and advances turn", RejectedWordScoresZero),
+    ("unavailable rack tile is refused", UnavailableRackTileIsRefused)
 };
 
 var failed = 0;
@@ -217,6 +218,15 @@ static void RejectedWordScoresZero()
     Equal("B", game.CurrentPlayer.Name);
     engine.Pass(game);
     Equal("CATERS?", new string(GameEngine.CurrentRack(game).ToArray()));
+}
+
+static void UnavailableRackTileIsRefused()
+{
+    var game = CreateGameForTileLimit();
+    var word = new WordScoreBuilder(); word.SetWord("BB");
+    new GameEngine().RecordWords(game, [word], "BB".ToCharArray());
+    Equal(false, GameEngine.CanAddToCurrentRack(game, [], 'B', out var reason));
+    Equal("No B tiles remain available.", reason);
 }
 
 static void Throws<TException>(Action action) where TException : Exception

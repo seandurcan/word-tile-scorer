@@ -17,6 +17,7 @@ public sealed class GamePage : ContentPage
     private readonly Label _tileStatus = new() { TextColor = AppPalette.Slate };
     private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
     private readonly Button _record = new() { Text = "Record turn", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
+    private bool _correctingRackEntry;
 
     public GamePage(GameState game)
     {
@@ -180,12 +181,26 @@ public sealed class GamePage : ContentPage
         _turnTotal.Text = $"Turn total: {editors.Sum(x => x.Score.Total) + bonus}" + (bonus > 0 ? " (includes 50-point bonus)" : string.Empty);
     }
 
-    private void PlacedTilesChanged(object? sender, TextChangedEventArgs e)
+    private async void PlacedTilesChanged(object? sender, TextChangedEventArgs e)
     {
-        var normalized = new string((e.NewTextValue ?? string.Empty)
+        if (_correctingRackEntry) return;
+        var requested = new string((e.NewTextValue ?? string.Empty)
             .Where(c => c == '?' || c is >= 'A' and <= 'Z' or >= 'a' and <= 'z')
             .Select(char.ToUpperInvariant).ToArray());
-        if (_placedTiles.Text != normalized) { _placedTiles.Text = normalized; return; }
+        var accepted = new List<char>();
+        string? rejectedReason = null;
+        foreach (var tile in requested)
+        {
+            if (GameEngine.CanAddToCurrentRack(_game, accepted, tile, out var reason)) accepted.Add(tile);
+            else rejectedReason ??= reason;
+        }
+        var normalized = new string(accepted.ToArray());
+        if (_placedTiles.Text != normalized)
+        {
+            _correctingRackEntry = true;
+            _placedTiles.Text = normalized;
+            _correctingRackEntry = false;
+        }
         var shortages = GameEngine.TileShortages(_game, normalized);
         var rackCount = GameEngine.CurrentRack(_game).Count + normalized.Length;
         _tileStatus.Text = shortages.Count == 0 && rackCount <= 7
@@ -195,6 +210,8 @@ public sealed class GamePage : ContentPage
                 : $"CHECK REQUIRED: {string.Join(", ", shortages.Select(x => $"{TileName(x.Key)} over by {x.Value}"))}";
         _tileStatus.TextColor = shortages.Count == 0 && rackCount <= 7 ? AppPalette.Slate : AppPalette.Vermillion;
         RefreshPendingTurn();
+        if (rejectedReason is not null)
+            await DisplayAlert("Tile not added", rejectedReason, "OK");
     }
 
     private char[] ParsedPlacedTiles() => (_placedTiles.Text ?? string.Empty).ToCharArray();

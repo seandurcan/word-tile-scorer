@@ -28,6 +28,7 @@ Development APKs use a stable development application ID and signing key, allowi
 - Each player has a persistent rack. Newly drawn tiles and tiles actually played are recorded separately; unused tiles remain visible when that player's next turn begins.
 - Standard 100-tile English distribution and per-letter usage are tracked from the tiles added to racks and actually used. A crossing tile shared by several new words is counted once.
 - Attempts to exceed the rack or set inventory show the exact problem and require an explicit Allow or Cancel decision.
+- A letter that is no longer available in the 100-tile set is refused immediately and is not added to the rack.
 - Rack tiles are an unordered collection. A word is blocked only if it cannot be formed from any combination of the current rack plus tiles recorded on the board. The opening word may use any subset of the rack; crossing words may reuse shared new tiles without consuming them twice.
 - Actually playing all seven rack tiles in one turn adds the official 50-point bonus. Merely having seven tiles in the rack does not.
 - Word premiums use bottom-aligned Double Word and Treble Word buttons with visible counts and a checked three-square board maximum.
