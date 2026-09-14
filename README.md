@@ -21,7 +21,7 @@ Development APKs use a stable development application ID and signing key, allowi
 - Undo the most recent turn.
 - Running player contributions and team totals.
 - Offline game-state persistence on the device.
-- Dictionary checking is optional and used only when an opponent challenges a word. An unchallenged word can be recorded immediately; a Collins-rejected word must be corrected or removed.
+- Dictionary checking is optional and used only when an opponent challenges a word. An unchallenged word can be recorded immediately. Selecting Reject word records 0 points for that player and immediately advances to the next turn.
 - Record turn always responds: it either explains missing input or confirms the player, recorded score and next player.
 - The active player is displayed in a prominent turn card with team and turn number.
 - The interface uses a high-contrast colour-blind-safe navy, blue, amber and neutral palette; status is never communicated by colour alone.

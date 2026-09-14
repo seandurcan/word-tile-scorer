@@ -18,7 +18,8 @@ var tests = new (string Name, Action Run)[]
     ("existing board tiles can extend a word", ExistingBoardTilesCanExtendWord),
     ("rack order does not matter and unused tiles remain unused", RackOrderAndUnusedTiles),
     ("unused rack tiles remain for the player's next turn", UnusedRackTilesRemain),
-    ("seven tiles on rack do not earn a bingo", FullRackIsNotBingo)
+    ("seven tiles on rack do not earn a bingo", FullRackIsNotBingo),
+    ("rejected word scores zero and advances turn", RejectedWordScoresZero)
 };
 
 var failed = 0;
@@ -202,6 +203,20 @@ static void FullRackIsNotBingo()
     var word = new WordScoreBuilder(); word.SetWord("CAT");
     var turn = new GameEngine().RecordWords(game, [word], "ZXTCAYQ".ToCharArray());
     Equal(0, turn.BingoBonus);
+}
+
+static void RejectedWordScoresZero()
+{
+    var players = new[] { Player.Create("A"), Player.Create("B") };
+    var engine = new GameEngine();
+    var game = engine.CreateGame(players, GameMode.Individual);
+    var turn = engine.RejectWord(game, "ZZZ", "CATERS?".ToCharArray());
+    Equal(0, turn.Score);
+    Equal(false, turn.IsPass);
+    Equal("ZZZ", turn.RejectedWord);
+    Equal("B", game.CurrentPlayer.Name);
+    engine.Pass(game);
+    Equal("CATERS?", new string(GameEngine.CurrentRack(game).ToArray()));
 }
 
 static void Throws<TException>(Action action) where TException : Exception

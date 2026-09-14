@@ -92,6 +92,17 @@ public sealed class GamePage : ContentPage
     {
         var editor = new WordEntryView(_words.Children.Count + 1);
         editor.Changed += (_, _) => RefreshPendingTurn();
+        editor.ChallengeRejected += async word =>
+        {
+            try
+            {
+                var playerName = _game.CurrentPlayer.Name;
+                _engine.RejectWord(_game, word, ParsedPlacedTiles());
+                await AfterTurn();
+                await DisplayAlert("Word rejected", $"{word} was rejected. {playerName} receives 0 points.\nNext turn: {_game.CurrentPlayer.Name}.", "OK");
+            }
+            catch (Exception ex) { await DisplayAlert("Cannot reject turn", ex.Message, "OK"); }
+        };
         editor.RemoveRequested += (_, _) =>
         {
             _words.Children.Remove(editor);
@@ -260,6 +271,7 @@ public sealed class WordEntryView : Border
     public bool IsRejected { get; private set; }
     public event EventHandler? Changed;
     public event EventHandler? RemoveRequested;
+    public event Action<string>? ChallengeRejected;
 
     public int Number { get => _number; set { _number = value; _heading.Text = $"Word {_number}"; } }
 
@@ -481,6 +493,7 @@ public sealed class WordEntryView : Border
             }
             _validation.IsVisible = true;
             Changed?.Invoke(this, EventArgs.Empty);
+            if (!accepted) ChallengeRejected?.Invoke(Score.Word);
         }));
     }
 }
@@ -506,8 +519,8 @@ public sealed class CollinsCheckPage : ContentPage
         {
             if (_completed) return;
             _completed = true;
-            completed(accepted);
             await Navigation.PopModalAsync();
+            completed(accepted);
         }
 
         accept.Clicked += async (_, _) => await Finish(true);

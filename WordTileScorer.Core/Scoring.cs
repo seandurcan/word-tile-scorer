@@ -259,6 +259,27 @@ public sealed class GameEngine
         return AddTurn(game, [], 0, true, playedAt);
     }
 
+    public Turn RejectWord(
+        GameState game,
+        string rejectedWord,
+        IReadOnlyList<char>? addedTiles = null,
+        DateTimeOffset? playedAt = null)
+    {
+        EnsurePlayable(game);
+        if (string.IsNullOrWhiteSpace(rejectedWord))
+            throw new ArgumentException("A rejected word is required.", nameof(rejectedWord));
+        var added = (addedTiles ?? []).Select(NormalizeTile).ToArray();
+        var rack = RackFor(game, game.CurrentPlayer.Id);
+        if (rack.Count + added.Length > 7)
+            throw new InvalidOperationException("A rack can contain no more than seven tiles.");
+        var shortages = TileShortages(game, added);
+        if (shortages.Count > 0) throw new TileLimitException(shortages);
+        var turn = AddTurn(game, [], 0, false, playedAt, addedTiles: added,
+            rejectedWord: rejectedWord.Trim().ToUpperInvariant());
+        rack.AddRange(added);
+        return turn;
+    }
+
     public Turn UndoLastTurn(GameState game)
     {
         if (game.Turns.Count == 0) throw new InvalidOperationException("There is no turn to undo.");
@@ -279,7 +300,8 @@ public sealed class GameEngine
         DateTimeOffset? playedAt,
         IReadOnlyList<char>? placedTiles = null,
         int bingoBonus = 0,
-        IReadOnlyList<char>? addedTiles = null)
+        IReadOnlyList<char>? addedTiles = null,
+        string? rejectedWord = null)
     {
         var player = game.CurrentPlayer;
         var turn = new Turn(
@@ -288,7 +310,8 @@ public sealed class GameEngine
         {
             PlacedTiles = placedTiles ?? [],
             AddedTiles = addedTiles ?? [],
-            BingoBonus = bingoBonus
+            BingoBonus = bingoBonus,
+            RejectedWord = rejectedWord
         };
         game.Turns.Add(turn);
         game.CurrentTurnIndex = (game.CurrentTurnIndex + 1) % game.TurnOrder.Count;

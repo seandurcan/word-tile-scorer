@@ -93,6 +93,7 @@ public sealed record Turn(
     public IReadOnlyList<char> PlacedTiles { get; init; } = [];
     public IReadOnlyList<char> AddedTiles { get; init; } = [];
     public int BingoBonus { get; init; }
+    public string? RejectedWord { get; init; }
 }
 
 public sealed record PlayedWord(
