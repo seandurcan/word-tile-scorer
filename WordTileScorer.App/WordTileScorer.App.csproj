@@ -9,8 +9,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>Word Tile Scorer</ApplicationTitle>
     <ApplicationId>ie.wordtilescorer.dev</ApplicationId>
-    <ApplicationDisplayVersion>0.3.4</ApplicationDisplayVersion>
-    <ApplicationVersion>13</ApplicationVersion>
+    <ApplicationDisplayVersion>0.3.5</ApplicationDisplayVersion>
+    <ApplicationVersion>14</ApplicationVersion>
     <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
