@@ -21,8 +21,7 @@ Development APKs use a stable development application ID and signing key, allowi
 - Undo the most recent turn.
 - Running player contributions and team totals.
 - Offline game-state persistence on the device.
-- Mandatory temporary word-validation gate: Collins opens inside the app with explicit Accept word and Reject word controls before the score can be recorded.
-- Changing scoring premiums does not cancel an accepted dictionary result; only changing the spelling requires another check.
+- Dictionary checking is optional and used only when an opponent challenges a word. An unchallenged word can be recorded immediately; a Collins-rejected word must be corrected or removed.
 - Record turn always responds: it either explains missing input or confirms the player, recorded score and next player.
 - The active player is displayed in a prominent turn card with team and turn number.
 - The interface uses a high-contrast colour-blind-safe navy, blue, amber and neutral palette; status is never communicated by colour alone.
@@ -59,4 +58,4 @@ dotnet run --project .\WordTileScorer.Core.SelfTest
 
 ## Scoring boundary
 
-The intended dictionary is Collins Scrabble Words (CSW24). Until licensed programmatic access is available, the application copies each entered word, opens the official Collins checker and requires the players to confirm its result. Every word created by a play must be confirmed. A changed word must be checked again; an unconfirmed word cannot be scored.
+The intended dictionary is Collins Scrabble Words (CSW24). If an opponent challenges a word, the application copies it and opens the official Collins checker. Unchallenged words do not require a dictionary check.

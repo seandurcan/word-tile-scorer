@@ -44,20 +44,20 @@ jobs:
             -p:AndroidSigningStorePass=WordTilesDev2026 \
             -p:AndroidSigningKeyAlias=wordtilesdev \
             -p:AndroidSigningKeyPass=WordTilesDev2026
-          cp WordTileScorer.App/bin/Release/net10.0-android/android-arm64/publish/*-Signed.apk WordTileScorer-Android-v0.3.6-PERSISTENT-RACKS.apk
+          cp WordTileScorer.App/bin/Release/net10.0-android/android-arm64/publish/*-Signed.apk WordTileScorer-Android-v0.3.7-OPTIONAL-CHALLENGES.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WordTileScorer-Android-v0.3.6-PERSISTENT-RACKS
-          path: WordTileScorer-Android-v0.3.6-PERSISTENT-RACKS.apk
+          name: WordTileScorer-Android-v0.3.7-OPTIONAL-CHALLENGES
+          path: WordTileScorer-Android-v0.3.7-OPTIONAL-CHALLENGES.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish direct GitHub download
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.6
-          name: Word Tile Scorer v0.3.6 — Persistent Player Racks
-          files: WordTileScorer-Android-v0.3.6-PERSISTENT-RACKS.apk
+          tag_name: v0.3.7
+          name: Word Tile Scorer v0.3.7 — Optional Challenges
+          files: WordTileScorer-Android-v0.3.7-OPTIONAL-CHALLENGES.apk
           fail_on_unmatched_files: true

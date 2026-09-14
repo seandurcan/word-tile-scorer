@@ -118,8 +118,8 @@ public sealed class GamePage : ContentPage
             var editors = Editors().Where(x => x.HasWord).ToArray();
             if (editors.Length == 0)
                 throw new InvalidOperationException("Enter at least one word, or use Pass (0).");
-            if (editors.Any(x => !x.IsConfirmedValid))
-                throw new InvalidOperationException("Check every entered word with Collins and select Accept word before recording the turn.");
+            if (editors.Any(x => x.IsRejected))
+                throw new InvalidOperationException("A challenged word was rejected. Remove or correct it before recording the turn.");
             var playerName = _game.CurrentPlayer.Name;
             var tiles = ParsedPlacedTiles();
             var rackCount = GameEngine.CurrentRack(_game).Count + tiles.Length;
@@ -249,7 +249,7 @@ public sealed class WordEntryView : Border
     private int _doubleWordCount;
     private int _trebleWordCount;
     private readonly Label _calculation = new() { FontSize = 17 };
-    private readonly Label _validation = new() { Text = "Word not yet checked", TextColor = AppPalette.Amber };
+    private readonly Label _validation = new() { Text = string.Empty, IsVisible = false };
     private readonly HashSet<int> _selectedLetters = [];
     private string? _confirmedWord;
     private int _number;
@@ -257,6 +257,7 @@ public sealed class WordEntryView : Border
     public WordScoreBuilder Score { get; } = new();
     public bool HasWord => Score.Letters.Count > 0;
     public bool IsConfirmedValid => string.Equals(_confirmedWord, Score.Word, StringComparison.Ordinal);
+    public bool IsRejected { get; private set; }
     public event EventHandler? Changed;
     public event EventHandler? RemoveRequested;
 
@@ -277,7 +278,7 @@ public sealed class WordEntryView : Border
         var doubleLetter = PremiumButton("Double letter", 2);
         var tripleLetter = PremiumButton("Triple letter", 3);
 
-        var check = new Button { Text = "Check this word with Collins" };
+        var check = new Button { Text = "Opponent challenge — check with Collins" };
         check.Clicked += CheckWord;
         var remove = new Button { Text = "Remove this word" };
         remove.Clicked += (_, _) => RemoveRequested?.Invoke(this, EventArgs.Empty);
@@ -443,8 +444,9 @@ public sealed class WordEntryView : Border
     private void Invalidate()
     {
         _confirmedWord = null;
-        _validation.Text = "Word not yet checked";
-        _validation.TextColor = AppPalette.Amber;
+        IsRejected = false;
+        _validation.Text = string.Empty;
+        _validation.IsVisible = false;
     }
 
     private async void CheckWord(object? sender, EventArgs e)
@@ -453,26 +455,31 @@ public sealed class WordEntryView : Border
         {
             _validation.Text = "Enter a word before checking Collins.";
             _validation.TextColor = AppPalette.Vermillion;
+            _validation.IsVisible = true;
             return;
         }
         Invalidate();
         await Clipboard.Default.SetTextAsync(Score.Word);
         _validation.Text = $"Checking {Score.Word} with Collins…";
+        _validation.IsVisible = true;
         Changed?.Invoke(this, EventArgs.Empty);
         await Navigation.PushModalAsync(new CollinsCheckPage(Score.Word, accepted =>
         {
             if (accepted)
             {
                 _confirmedWord = Score.Word;
-                _validation.Text = $"Confirmed valid: {_confirmedWord}";
+                IsRejected = false;
+                _validation.Text = $"Challenge resolved — accepted: {_confirmedWord}";
                 _validation.TextColor = AppPalette.Blue;
             }
             else
             {
                 _confirmedWord = null;
-                _validation.Text = $"Rejected: {Score.Word}";
+                IsRejected = true;
+                _validation.Text = $"Challenge upheld — rejected: {Score.Word}";
                 _validation.TextColor = AppPalette.Vermillion;
             }
+            _validation.IsVisible = true;
             Changed?.Invoke(this, EventArgs.Empty);
         }));
     }
