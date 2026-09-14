@@ -113,31 +113,48 @@ public sealed class GameEngine
             Mode = mode,
             Players = orderedPlayers.ToList(),
             Teams = selectedTeams,
-            TurnOrder = orderedPlayers.Select(p => p.Id).ToList()
+            TurnOrder = orderedPlayers.Select(p => p.Id).ToList(),
+            PlayerRacks = orderedPlayers.ToDictionary(p => p.Id, _ => new List<char>())
         };
     }
 
     public Turn RecordWords(
         GameState game,
         IReadOnlyList<WordScoreBuilder> scores,
-        IReadOnlyList<char>? placedTiles = null,
+        IReadOnlyList<char>? addedTiles = null,
         bool allowExcessTiles = false,
         DateTimeOffset? playedAt = null)
     {
         EnsurePlayable(game);
         if (scores.Count == 0 || scores.Any(s => s.Letters.Count == 0))
             throw new InvalidOperationException("Enter every word or use Pass.");
-        var rackTiles = (placedTiles ?? []).Select(NormalizeTile).ToArray();
+        var added = (addedTiles ?? []).Select(NormalizeTile).ToArray();
+        var rack = RackFor(game, game.CurrentPlayer.Id);
+        var rackTiles = rack.Concat(added).ToArray();
         if (rackTiles.Length > 7 && !allowExcessTiles)
             throw new InvalidOperationException("A rack can contain no more than seven tiles.");
-        var tiles = ResolvePlacedTiles(game, scores, rackTiles);
-        var shortages = TileShortages(game, tiles);
+        var shortages = TileShortages(game, added);
         if (shortages.Count > 0 && !allowExcessTiles)
             throw new TileLimitException(shortages);
+        var tiles = ResolvePlacedTiles(game, scores, rackTiles);
         var words = scores.Select(s => s.Build()).ToArray();
         var bingo = tiles.Count == 7 ? 50 : 0;
-        return AddTurn(game, words, checked(words.Sum(w => w.Score) + bingo), false, playedAt, tiles, bingo);
+        var turn = AddTurn(game, words, checked(words.Sum(w => w.Score) + bingo), false, playedAt, tiles, bingo, added);
+        rack.AddRange(added);
+        foreach (var tile in tiles) rack.Remove(tile);
+        return turn;
     }
+
+    public static IReadOnlyList<char> PreviewPlacedTiles(
+        GameState game,
+        IReadOnlyList<WordScoreBuilder> words,
+        IReadOnlyList<char>? addedTiles = null)
+    {
+        var rack = RackFor(game, game.CurrentPlayer.Id);
+        return ResolvePlacedTiles(game, words, rack.Concat(addedTiles ?? []).ToArray());
+    }
+
+    public static IReadOnlyList<char> CurrentRack(GameState game) => RackFor(game, game.CurrentPlayer.Id).ToArray();
 
     public static IReadOnlyDictionary<char, int> UsedTiles(GameState game) => game.Turns
         .SelectMany(t => t.PlacedTiles ?? [])
@@ -146,13 +163,17 @@ public sealed class GameEngine
 
     public static IReadOnlyDictionary<char, int> TileShortages(GameState game, IEnumerable<char> proposedTiles)
     {
-        var used = UsedTiles(game);
+        var inPlay = game.Turns.SelectMany(t => t.PlacedTiles ?? [])
+            .Concat(game.PlayerRacks.Values.SelectMany(rack => rack))
+            .Select(NormalizeTile)
+            .GroupBy(tile => tile)
+            .ToDictionary(group => group.Key, group => group.Count());
         return proposedTiles.Select(NormalizeTile)
             .GroupBy(tile => tile)
             .Select(group => new
             {
                 Tile = group.Key,
-                Excess = used.GetValueOrDefault(group.Key) + group.Count() - EnglishTileDistribution.Counts[group.Key]
+                Excess = inPlay.GetValueOrDefault(group.Key) + group.Count() - EnglishTileDistribution.Counts[group.Key]
             })
             .Where(item => item.Excess > 0)
             .ToDictionary(item => item.Tile, item => item.Excess);
@@ -244,6 +265,9 @@ public sealed class GameEngine
         var removed = game.Turns[^1];
         game.Turns.RemoveAt(game.Turns.Count - 1);
         game.CurrentTurnIndex = (game.CurrentTurnIndex - 1 + game.TurnOrder.Count) % game.TurnOrder.Count;
+        var rack = RackFor(game, removed.PlayerId);
+        rack.AddRange(removed.PlacedTiles ?? []);
+        foreach (var tile in removed.AddedTiles ?? []) rack.Remove(tile);
         return removed;
     }
 
@@ -254,7 +278,8 @@ public sealed class GameEngine
         bool isPass,
         DateTimeOffset? playedAt,
         IReadOnlyList<char>? placedTiles = null,
-        int bingoBonus = 0)
+        int bingoBonus = 0,
+        IReadOnlyList<char>? addedTiles = null)
     {
         var player = game.CurrentPlayer;
         var turn = new Turn(
@@ -262,11 +287,19 @@ public sealed class GameEngine
             playedAt ?? DateTimeOffset.Now, words, score, isPass)
         {
             PlacedTiles = placedTiles ?? [],
+            AddedTiles = addedTiles ?? [],
             BingoBonus = bingoBonus
         };
         game.Turns.Add(turn);
         game.CurrentTurnIndex = (game.CurrentTurnIndex + 1) % game.TurnOrder.Count;
         return turn;
+    }
+
+    private static List<char> RackFor(GameState game, Guid playerId)
+    {
+        if (!game.PlayerRacks.TryGetValue(playerId, out var rack))
+            game.PlayerRacks[playerId] = rack = [];
+        return rack;
     }
 
     private static void EnsurePlayable(GameState game)

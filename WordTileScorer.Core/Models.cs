@@ -63,6 +63,7 @@ public sealed class GameState
     public List<Player> Players { get; init; } = [];
     public List<Team> Teams { get; init; } = [];
     public List<Guid> TurnOrder { get; init; } = [];
+    public Dictionary<Guid, List<char>> PlayerRacks { get; init; } = [];
     public int CurrentTurnIndex { get; set; }
     public List<Turn> Turns { get; init; } = [];
     public bool IsFinished { get; set; }
@@ -90,6 +91,7 @@ public sealed record Turn(
     bool IsPass)
 {
     public IReadOnlyList<char> PlacedTiles { get; init; } = [];
+    public IReadOnlyList<char> AddedTiles { get; init; } = [];
     public int BingoBonus { get; init; }
 }
 

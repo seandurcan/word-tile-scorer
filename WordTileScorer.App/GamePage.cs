@@ -12,7 +12,8 @@ public sealed class GamePage : ContentPage
     private readonly Border _activePlayerCard;
     private readonly VerticalStackLayout _totals = new() { Spacing = 4 };
     private readonly VerticalStackLayout _words = new() { Spacing = 14 };
-    private readonly Entry _placedTiles = new() { Placeholder = "All tiles currently on rack, e.g. CATERS?", CharacterSpacing = 2 };
+    private readonly Label _rack = new() { FontSize = 20, FontAttributes = FontAttributes.Bold, TextColor = AppPalette.Navy };
+    private readonly Entry _placedTiles = new() { Placeholder = "New tiles drawn, e.g. CAT (? = blank)", CharacterSpacing = 2 };
     private readonly Label _tileStatus = new() { TextColor = AppPalette.Slate };
     private readonly Label _turnTotal = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
     private readonly Button _record = new() { Text = "Record turn", BackgroundColor = AppPalette.Blue, TextColor = Colors.White };
@@ -75,7 +76,9 @@ public sealed class GamePage : ContentPage
                     new BoxView { HeightRequest = 1, Color = Colors.Gray },
                     new Label { Text = "Words made by this play", FontSize = 20, FontAttributes = FontAttributes.Bold },
                     new Label { Text = "Current rack", FontAttributes = FontAttributes.Bold },
-                    new Label { Text = "Enter all available rack tiles in any order. The app determines which ones the word uses." },
+                    _rack,
+                    new Label { Text = "Add newly drawn tiles", FontAttributes = FontAttributes.Bold },
+                    new Label { Text = "Unused tiles from this player's previous turn remain in the rack. Enter only the new tiles drawn." },
                     _placedTiles, _tileStatus, tileUsage,
                     new Label { Text = "Enter a complete word. Select one or more letters, apply one letter premium to them, then choose any word premiums covered." },
                     _words, addWord, _turnTotal, _record, pass, undo, finish
@@ -119,15 +122,16 @@ public sealed class GamePage : ContentPage
                 throw new InvalidOperationException("Check every entered word with Collins and select Accept word before recording the turn.");
             var playerName = _game.CurrentPlayer.Name;
             var tiles = ParsedPlacedTiles();
-            if (tiles.Length == 0)
-                throw new InvalidOperationException("Enter the tiles currently available on the rack.");
+            var rackCount = GameEngine.CurrentRack(_game).Count + tiles.Length;
+            if (rackCount == 0)
+                throw new InvalidOperationException("Add the tiles currently available to this player's rack.");
             var shortages = GameEngine.TileShortages(_game, tiles);
-            var overRack = tiles.Length > 7;
+            var overRack = rackCount > 7;
             var allowExcess = false;
             if (shortages.Count > 0 || overRack)
             {
                 var details = new List<string>();
-                if (overRack) details.Add($"The rack contains {tiles.Length} tiles; the maximum is 7.");
+                if (overRack) details.Add($"The rack would contain {rackCount} tiles; the maximum is 7.");
                 details.AddRange(shortages.Select(x => $"{TileName(x.Key)} exceeds the set by {x.Value}."));
                 allowExcess = await DisplayAlert("Tile limit exceeded", string.Join("\n", details) + "\n\nAllow this play anyway?", "Allow", "Cancel");
                 if (!allowExcess) return;
@@ -152,8 +156,16 @@ public sealed class GamePage : ContentPage
     private void RefreshPendingTurn()
     {
         var editors = Editors().Where(x => x.HasWord).ToArray();
-        var tileCount = ParsedPlacedTiles().Length;
-        var bonus = tileCount == 7 ? 50 : 0;
+        var bonus = 0;
+        if (editors.Length > 0)
+        {
+            try
+            {
+                var used = GameEngine.PreviewPlacedTiles(_game, editors.Select(x => x.Score).ToArray(), ParsedPlacedTiles());
+                bonus = used.Count == 7 ? 50 : 0;
+            }
+            catch { }
+        }
         _turnTotal.Text = $"Turn total: {editors.Sum(x => x.Score.Total) + bonus}" + (bonus > 0 ? " (includes 50-point bonus)" : string.Empty);
     }
 
@@ -164,10 +176,13 @@ public sealed class GamePage : ContentPage
             .Select(char.ToUpperInvariant).ToArray());
         if (_placedTiles.Text != normalized) { _placedTiles.Text = normalized; return; }
         var shortages = GameEngine.TileShortages(_game, normalized);
-        _tileStatus.Text = shortages.Count == 0
-            ? $"Rack tiles available: {normalized.Length}/7 (order does not matter)"
-            : $"CHECK REQUIRED: {string.Join(", ", shortages.Select(x => $"{TileName(x.Key)} over by {x.Value}"))}";
-        _tileStatus.TextColor = shortages.Count == 0 ? AppPalette.Slate : AppPalette.Vermillion;
+        var rackCount = GameEngine.CurrentRack(_game).Count + normalized.Length;
+        _tileStatus.Text = shortages.Count == 0 && rackCount <= 7
+            ? $"Rack after adding: {rackCount}/7 (order does not matter)"
+            : rackCount > 7
+                ? $"CHECK REQUIRED: rack would contain {rackCount} tiles; maximum 7"
+                : $"CHECK REQUIRED: {string.Join(", ", shortages.Select(x => $"{TileName(x.Key)} over by {x.Value}"))}";
+        _tileStatus.TextColor = shortages.Count == 0 && rackCount <= 7 ? AppPalette.Slate : AppPalette.Vermillion;
         RefreshPendingTurn();
     }
 
@@ -176,8 +191,12 @@ public sealed class GamePage : ContentPage
     private string TileUsageText()
     {
         var used = GameEngine.UsedTiles(_game);
+        var added = _game.Turns.SelectMany(turn => turn.AddedTiles ?? [])
+            .GroupBy(char.ToUpperInvariant).ToDictionary(group => group.Key, group => group.Count());
+        var onRacks = _game.PlayerRacks.Values.SelectMany(rack => rack)
+            .GroupBy(char.ToUpperInvariant).ToDictionary(group => group.Key, group => group.Count());
         return string.Join("\n", EnglishTileDistribution.Counts.Select(x =>
-            $"{TileName(x.Key)}: {used.GetValueOrDefault(x.Key)} used / {x.Value} available"));
+            $"{TileName(x.Key)}: {added.GetValueOrDefault(x.Key)} added; {used.GetValueOrDefault(x.Key)} played; {onRacks.GetValueOrDefault(x.Key)} on racks; {x.Value} in set"));
     }
 
     private static string TileName(char tile) => tile == '?' ? "Blank" : tile.ToString();
@@ -189,6 +208,8 @@ public sealed class GamePage : ContentPage
         _turnDetail.Text = team is null
             ? $"Individual play · Turn {_game.Turns.Count + 1}"
             : $"{team.Name} · Turn {_game.Turns.Count + 1}";
+        var rack = GameEngine.CurrentRack(_game);
+        _rack.Text = rack.Count == 0 ? "Empty" : string.Join("  ", rack);
         _totals.Children.Clear();
         if (_game.Mode == GameMode.Teams)
             foreach (var item in _game.Teams) _totals.Children.Add(new Label { Text = $"{item.Name}: {_game.TeamTotal(item.Id)}" });

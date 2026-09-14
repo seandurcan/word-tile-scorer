@@ -16,7 +16,9 @@ var tests = new (string Name, Action Run)[]
     ("seven placed tiles earn bingo bonus", SevenTileBonus),
     ("opening word cannot exceed placed tiles", OpeningWordCannotExceedPlacedTiles),
     ("existing board tiles can extend a word", ExistingBoardTilesCanExtendWord),
-    ("rack order does not matter and unused tiles remain unused", RackOrderAndUnusedTiles)
+    ("rack order does not matter and unused tiles remain unused", RackOrderAndUnusedTiles),
+    ("unused rack tiles remain for the player's next turn", UnusedRackTilesRemain),
+    ("seven tiles on rack do not earn a bingo", FullRackIsNotBingo)
 };
 
 var failed = 0;
@@ -181,6 +183,25 @@ static void RackOrderAndUnusedTiles()
     Equal(1, used['C']);
     Equal(1, used['A']);
     Equal(1, used['T']);
+}
+
+static void UnusedRackTilesRemain()
+{
+    var players = new[] { Player.Create("A"), Player.Create("B") };
+    var engine = new GameEngine();
+    var game = engine.CreateGame(players, GameMode.Individual);
+    var first = new WordScoreBuilder(); first.SetWord("CAT");
+    engine.RecordWords(game, [first], "ZXTCAYQ".ToCharArray());
+    engine.Pass(game);
+    Equal("ZXYQ", new string(GameEngine.CurrentRack(game).ToArray()));
+}
+
+static void FullRackIsNotBingo()
+{
+    var game = CreateGameForTileLimit();
+    var word = new WordScoreBuilder(); word.SetWord("CAT");
+    var turn = new GameEngine().RecordWords(game, [word], "ZXTCAYQ".ToCharArray());
+    Equal(0, turn.BingoBonus);
 }
 
 static void Throws<TException>(Action action) where TException : Exception
